@@ -15,11 +15,10 @@ const pool = new Pool({
 const checkRequiredFields = (request, response, next) => {
     const receivedAppUser = request.body;
 
-    if (!receivedAppUser.username || !receivedAppUser.email) {
-
-        res.status(400).send("Invalid app user");
-
+    if (!receivedAppUser.username || !receivedAppUser.email || !receivedAppUser.username.length || !receivedAppUser.email.length) {
+        response.status(400).send("Invalid app user");
     } else {
+        request.receivedAppUser = receivedAppUser;
         next();
     }
 }
@@ -46,14 +45,14 @@ appUsersRouter.get('/', (request, response, next) => {
 
 // Create new app user
 appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
-    const { username, email } = request.body;
+    const { username, email } = request.receivedAppUser;
     const date_created = getTodaysDate();
 
     pool.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, result) => {
         if (error) {
             next(error);
         }
-        response.status(201).send(`User added with ID:${result.rows[0].id}`);
+        response.status(201).json({ appUser: result.rows});
     });
 });
 
@@ -61,14 +60,15 @@ appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
 appUsersRouter.param('id', (request, response, next, id) => {
     pool.query('SELECT * FROM app_user WHERE id = $1',
         [id],
-        (error, row) => {
+        (error, result) => {
             if (error) {
                 next(error);
-            } else if (row) {
-                request.appUser = row;
+            } else if (result.length) {
+                request.appUser = result.rows;
+                console.log(result.rows);
                 next();
             } else {
-                res.status(404).send('App user not found');
+                response.status(404).send('App user not found');
             }
         }
     );
@@ -76,42 +76,34 @@ appUsersRouter.param('id', (request, response, next, id) => {
 
 // Get app user by id
 appUsersRouter.get('/:id', (request, response) => {
-    const id = parseInt(request.params.id);
-
-    pool.query('SELECT * FROM app_user WHERE id = $1', [id], (error, results) => {
-        if (error) {
-            throw error;
-        }
-        response.status(200).json(results.rows);
-    });
+    response.status(200).json({ appUser: request.appUser });
 });
 
 // Update app user by id
-appUsersRouter.put('/:id', (request, response) => {
-    const id = parseInt(request.params.id);
-    const { username, email } = request.body;
+appUsersRouter.put('/:id', checkRequiredFields, (request, response) => {
+    const id = request.params.id;
+    const { username, email } = request.receivedAppUser;
 
     pool.query(
-        'UPDATE app_user SET username = $1, email = $2 WHERE id = $3',
+        'UPDATE app_user SET username = $1, email = $2 WHERE id = $3 RETURNING *',
         [username, email, id],
-        (error, results) => {
+        (error, result) => {
             if (error) {
                 throw error;
             }
-            response.status(200).send(`User modified with ID: ${id}`);
+            response.status(200).json({appUser: result.rows});
         }
     );
 });
 
 // Delete app user
 appUsersRouter.delete('/:id', (request, response) => {
-    const id = parseInt(request.params.id);
-  
-    pool.query('DELETE FROM app_user WHERE id = $1', [id], (error, results) => {
-      if (error) {
-        throw error;
-      }
-      response.status(200).send(`User deleted with ID: ${id}`);
+    const id = request.params.id;
+    pool.query('DELETE FROM app_user WHERE id = $1', [id], (error, result) => {
+        if (error) {
+            throw error;
+        }
+        response.status(200).send(`App user with id ${id} has been deleted`);
     });
-  });
+});
 

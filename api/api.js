@@ -8,6 +8,6 @@ apiRouter.get('', (request, response, next) => {
     response.json({ info: 'Node.js, Express, and Postgres API' });
 });
 
-const appUsersRouter = require('./appUsersRouter');
+const appUsersRouter = require('./appUsers');
 apiRouter.use('/appusers', appUsersRouter);
 

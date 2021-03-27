@@ -16,4 +16,6 @@
     "morgan": "^1.10.0",
     "pg": "^8.5.1"
   }
+  //,
+  //"start": "node ./src/bin/www"
 }
