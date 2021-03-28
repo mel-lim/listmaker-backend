@@ -2,14 +2,8 @@ const express = require('express');
 const appUsersRouter = express.Router();
 module.exports = appUsersRouter;
 
-const Pool = require('pg').Pool
-const pool = new Pool({
-    user: 'me',
-    host: 'localhost',
-    database: 'listmaker-end-to-end',
-    password: 'password',
-    port: 5432,
-});
+// Centralise our data access for reuseability per the node-postgres library guide
+const db = require('../db');
 
 // Middleware to check that all the required fields are provided in the request
 const checkRequiredFields = (request, response, next) => {
@@ -35,7 +29,7 @@ const getTodaysDate = () => {
 
 // Get all the app users
 appUsersRouter.get('/', (request, response, next) => {
-    pool.query('SELECT * FROM app_user ORDER BY id ASC', (error, results) => {
+    db.query('SELECT * FROM app_user ORDER BY id ASC', (error, results) => {
         if (error) {
             next(error);
         }
@@ -48,7 +42,7 @@ appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
     const { username, email } = request.receivedAppUser;
     const date_created = getTodaysDate();
 
-    pool.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, result) => {
+    db.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, result) => {
         if (error) {
             next(error);
         }
@@ -57,15 +51,14 @@ appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
 });
 
 // Validate app user id
-appUsersRouter.param('id', (request, response, next, id) => {
-    pool.query('SELECT * FROM app_user WHERE id = $1',
+appUsersRouter.param('appUserId', (request, response, next, id) => {
+    db.query('SELECT * FROM app_user WHERE id = $1',
         [id],
         (error, result) => {
             if (error) {
                 next(error);
-            } else if (result.length) {
+            } else if (result.rows.length) {
                 request.appUser = result.rows;
-                console.log(result.rows);
                 next();
             } else {
                 response.status(404).send('App user not found');
@@ -75,16 +68,16 @@ appUsersRouter.param('id', (request, response, next, id) => {
 });
 
 // Get app user by id
-appUsersRouter.get('/:id', (request, response) => {
+appUsersRouter.get('/:appUserId', (request, response) => {
     response.status(200).json({ appUser: request.appUser });
 });
 
 // Update app user by id
-appUsersRouter.put('/:id', checkRequiredFields, (request, response) => {
-    const id = request.params.id;
+appUsersRouter.put('/:appUserId', checkRequiredFields, (request, response) => {
+    const id = request.params.appUserId;
     const { username, email } = request.receivedAppUser;
 
-    pool.query(
+    db.query(
         'UPDATE app_user SET username = $1, email = $2 WHERE id = $3 RETURNING *',
         [username, email, id],
         (error, result) => {
@@ -97,9 +90,9 @@ appUsersRouter.put('/:id', checkRequiredFields, (request, response) => {
 });
 
 // Delete app user
-appUsersRouter.delete('/:id', (request, response) => {
-    const id = request.params.id;
-    pool.query('DELETE FROM app_user WHERE id = $1', [id], (error, result) => {
+appUsersRouter.delete('/:appUserId', (request, response) => {
+    const id = request.params.appUserId;
+    db.query('DELETE FROM app_user WHERE id = $1', [id], (error, result) => {
         if (error) {
             throw error;
         }
@@ -107,3 +100,6 @@ appUsersRouter.delete('/:id', (request, response) => {
     });
 });
 
+// Import appUsersTripsRouter and mount it
+const appUsersTripsRouter = require('./appUsersTrips');
+appUsersRouter.use('/:appUserId/appuserstrips', appUsersTripsRouter);
