@@ -35,18 +35,30 @@ appUsersRouter.get('/', (request, response, next) => {
         }
         response.status(200).json(results.rows);
     });
-});
+}); 
+
+/* // Get the app users by username and email
+appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
+    const { username, email } = request.receivedAppUser;
+    db.query('SELECT * FROM app_user WHERE username = $1 AND email = $2', [username, email], (error, results) => {
+        if (error) {
+            next(error);
+        }
+        response.status(200).json(results.rows);
+    });
+}); */
 
 // Create new app user
 appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
     const { username, email } = request.receivedAppUser;
     const date_created = getTodaysDate();
 
-    db.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, result) => {
+    db.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, results) => {
         if (error) {
             next(error);
         }
-        response.status(201).json({ appUser: result.rows});
+        console.log(result.rows);
+        response.status(201).json({ appUser: results.rows});
     });
 });
 
@@ -99,6 +111,29 @@ appUsersRouter.delete('/:appUserId', (request, response) => {
         response.status(200).send(`App user with id ${id} has been deleted`);
     });
 });
+
+// Validate app user id
+appUsersRouter.param('appUserId', (request, response, next, id) => {
+    db.query('SELECT * FROM app_user WHERE id = $1',
+        [id],
+        (error, result) => {
+            if (error) {
+                next(error);
+            } else if (result.rows.length) {
+                request.appUser = result.rows;
+                next();
+            } else {
+                response.status(404).send('App user not found');
+            }
+        }
+    );
+});
+
+// Get app user by id
+appUsersRouter.get('/:appUserId', (request, response) => {
+    response.status(200).json({ appUser: request.appUser });
+});
+
 
 // Import appUsersTripsRouter and mount it
 const appUsersTripsRouter = require('./appUsersTrips');
