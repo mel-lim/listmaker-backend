@@ -1,4 +1,5 @@
 const express = require('express');
+const helper = require('../db/helper');
 const appUsersRouter = express.Router();
 module.exports = appUsersRouter;
 
@@ -8,9 +9,8 @@ const db = require('../db');
 // Middleware to check that all the required fields are provided in the request
 const checkRequiredFields = (request, response, next) => {
     const receivedAppUser = request.body;
-
-    if (!receivedAppUser.username || !receivedAppUser.email || !receivedAppUser.username.length || !receivedAppUser.email.length) {
-        response.status(400).send("Invalid app user");
+    if (!receivedAppUser.username || !receivedAppUser.email || !receivedAppUser.password || !receivedAppUser.username.length || !receivedAppUser.email.length || !receivedAppUser.password.length) {
+        response.status(400).send({'message': 'Some values are missing'});
     } else {
         request.receivedAppUser = receivedAppUser;
         next();
@@ -50,14 +50,23 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
 
 // Create new app user
 appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
-    const { username, email } = request.receivedAppUser;
-    const date_created = getTodaysDate();
+    const { username, email, password } = request.receivedAppUser;
+    const hashedPassword = helper.hashPassword(password);
+    const dateCreated = getTodaysDate();
+    const dateModified = getTodaysDate();
 
-    db.query('INSERT INTO app_user (username, date_created, email) VALUES ($1, $2, $3) RETURNING *', [username, date_created, email], (error, results) => {
+    db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING username, email', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
         if (error) {
+            if (error.code === '23505') {
+                if (error.constraint === 'app_user_username_key') {
+                    return response.status(400).send({ 'message': 'User with that username already exists' });
+                } else if (error.constraint === 'app_user_email_key') {
+                    return response.status(400).send({ 'message': 'User with that email already exists' });
+                }
+            }
             next(error);
         }
-        console.log(result.rows);
+        console.log(results.rows);
         response.status(201).json({ appUser: results.rows});
     });
 });
