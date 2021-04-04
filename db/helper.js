@@ -8,7 +8,7 @@ const helper = {
     @returns {string} returns hashed password */
 
     hashPassword(password) {
-        return bcrypt.hashSync(password, bcrypt.genSaltSync(8));
+        return bcrypt.hashSync(password, bcrypt.genSaltSync(10));
     },
 
     /* Compare password method

@@ -49,8 +49,13 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
 }); */
 
 // Create new app user
-appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
-    const { username, email, password } = request.receivedAppUser;
+appUsersRouter.post('/signup', (request, response, next) => {
+
+    const { username, email, password } = request.body;
+    if (!username || !email || !password || !username.length || !email.length || !password.length) {
+        return response.status(400).send({'message': 'Some values are missing'});
+    }
+    
     const hashedPassword = helper.hashPassword(password);
     const dateCreated = getTodaysDate();
     const dateModified = getTodaysDate();
@@ -70,6 +75,49 @@ appUsersRouter.post('/', checkRequiredFields, (request, response, next) => {
         response.status(201).json({ appUser: results.rows});
     });
 });
+
+// Login user
+appUsersRouter.post('/login', (request, response, next) => {
+    const { username, email, password } = request.body;
+
+    if ((!username && !email) || (!password) || (!username.length && !email.length) || (!password.length)) {
+        return response.status(400).send({'message': 'Some values are missing'});
+    }
+
+    let queryText;
+    let values;
+
+    if (username.length > 0) {
+        queryText = 'SELECT * FROM app_user WHERE username = $1';
+        values = [username];
+    } else if (email.length > 0) {
+        queryText = 'SELECT * FROM app_user WHERE email = $1';
+        values = [email];
+    }
+    
+    db.query(queryText, values, (error, results) => {
+        if (error) {
+            next(error);
+        }
+        
+        if (!results.rows[0]) {
+            //return response.status(400).send({'message': 'The user could not be found'});
+            return response.status(400).send({'message': 'The credentials you provided are incorrect'});
+        }
+        
+        if (!helper.comparePassword(results.rows[0].hashed_password, password)) {
+            //return response.status(400).send({'message': 'The password is incorrect'});
+            return response.status(400).send({'message': 'The credentials you provided are incorrect'});
+        }
+
+        /* const token = helper.generateToken(rows[0].id);
+        return response.status(200).send({ token }); */
+
+        results.rows[0].hashed_password = 'removed';
+
+        response.status(200).json({ appUser: results.rows});
+    });
+})
 
 // Validate app user id
 appUsersRouter.param('appUserId', (request, response, next, id) => {
