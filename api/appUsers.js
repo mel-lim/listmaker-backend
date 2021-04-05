@@ -1,5 +1,6 @@
 const express = require('express');
 const helper = require('../db/helper');
+const bcrypt = require('bcrypt');
 const appUsersRouter = express.Router();
 module.exports = appUsersRouter;
 
@@ -10,7 +11,7 @@ const db = require('../db');
 const checkRequiredFields = (request, response, next) => {
     const receivedAppUser = request.body;
     if (!receivedAppUser.username || !receivedAppUser.email || !receivedAppUser.password || !receivedAppUser.username.length || !receivedAppUser.email.length || !receivedAppUser.password.length) {
-        response.status(400).send({'message': 'Some values are missing'});
+        response.status(400).send({ 'message': 'Some values are missing' });
     } else {
         request.receivedAppUser = receivedAppUser;
         next();
@@ -35,7 +36,7 @@ appUsersRouter.get('/', (request, response, next) => {
         }
         response.status(200).json(results.rows);
     });
-}); 
+});
 
 /* // Get the app users by username and email
 appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
@@ -52,41 +53,53 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
 appUsersRouter.post('/signup', (request, response, next) => {
 
     const { username, email, password } = request.body;
+
+    // Validate required fields
     if (!username || !email || !password || !username.length || !email.length || !password.length) {
-        return response.status(400).send({'message': 'Some values are missing'});
+        return response.status(400).send({ 'message': 'Some values are missing' });
     }
-    
-    const hashedPassword = helper.hashPassword(password);
+
+    const saltRounds = 10;
     const dateCreated = getTodaysDate();
     const dateModified = getTodaysDate();
 
-    db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING username, email', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
-        if (error) {
-            if (error.code === '23505') {
-                if (error.constraint === 'app_user_username_key') {
-                    return response.status(400).send({ 'message': 'User with that username already exists' });
-                } else if (error.constraint === 'app_user_email_key') {
-                    return response.status(400).send({ 'message': 'User with that email already exists' });
-                }
-            }
-            next(error);
+    // Hash plain-text password using bcrypt's async hash technique
+    bcrypt.hash(password, saltRounds, function (err, hashedPassword) {
+        if (err) {
+            next(err);
         }
-        console.log(results.rows);
-        response.status(201).json({ appUser: results.rows});
+
+        db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING username, email', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
+            if (error) {
+                if (error.code === '23505') {
+                    if (error.constraint === 'app_user_username_key') {
+                        return response.status(400).send({ 'message': 'User with that username already exists' });
+                    } else if (error.constraint === 'app_user_email_key') {
+                        return response.status(400).send({ 'message': 'User with that email already exists' });
+                    }
+                }
+                next(error);
+            }
+            console.log(results.rows);
+            response.status(201).json({ appUser: results.rows });
+        });
     });
 });
 
-// Login user
+// Login app user
 appUsersRouter.post('/login', (request, response, next) => {
+
     const { username, email, password } = request.body;
 
+    // Validate required fields
     if ((!username && !email) || (!password) || (!username.length && !email.length) || (!password.length)) {
-        return response.status(400).send({'message': 'Some values are missing'});
+        return response.status(400).send({ 'message': 'Some values are missing' });
     }
 
     let queryText;
     let values;
 
+    // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
     if (username.length > 0) {
         queryText = 'SELECT * FROM app_user WHERE username = $1';
         values = [username];
@@ -94,28 +107,32 @@ appUsersRouter.post('/login', (request, response, next) => {
         queryText = 'SELECT * FROM app_user WHERE email = $1';
         values = [email];
     }
-    
+
     db.query(queryText, values, (error, results) => {
         if (error) {
             next(error);
         }
-        
+
         if (!results.rows[0]) {
             //return response.status(400).send({'message': 'The user could not be found'});
-            return response.status(400).send({'message': 'The credentials you provided are incorrect'});
+            return response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         }
-        
-        if (!helper.comparePassword(results.rows[0].hashed_password, password)) {
+
+        // Compare user-inputted plain-text password with the hashed password stored in the db using bcrypt's async compare method
+        bcrypt.compare(password, results.rows[0].hashed_password, function (err, result) {
+            if (err) {
+                next(err);
+            }
             //return response.status(400).send({'message': 'The password is incorrect'});
-            return response.status(400).send({'message': 'The credentials you provided are incorrect'});
-        }
-
-        /* const token = helper.generateToken(rows[0].id);
-        return response.status(200).send({ token }); */
-
-        results.rows[0].hashed_password = 'removed';
-
-        response.status(200).json({ appUser: results.rows});
+            if (result === false) {
+                response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+            } else {
+                /* const token = helper.generateToken(rows[0].id);
+                return response.status(200).send({ token }); */
+                results.rows[0].hashed_password = 'removed';
+                response.status(200).json({ appUser: results.rows });
+            }
+        });
     });
 })
 
@@ -153,7 +170,7 @@ appUsersRouter.put('/:appUserId', checkRequiredFields, (request, response) => {
             if (error) {
                 throw error;
             }
-            response.status(200).json({appUser: result.rows});
+            response.status(200).json({ appUser: result.rows });
         }
     );
 });
