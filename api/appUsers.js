@@ -4,10 +4,9 @@ module.exports = appUsersRouter;
 
 // Centralise our data access for reuseability per the node-postgres library guide
 const db = require('../db');
-
-// Import modules
+const { signUpValidation, loginValidation } = require('../validation');
 const bcrypt = require('bcrypt');
-const Joi = require('joi');
+
 
 // Middleware to check that all the required fields are provided in the request
 const checkRequiredFields = (request, response, next) => {
@@ -51,26 +50,11 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
     });
 }); */
 
-// Sign up validation schema
-const signUpSchema = Joi.object({
-    username: Joi.string()
-        .alphanum()
-        .min(2)
-        .required(),
-    email: Joi.string()
-        .email()
-        .min(6)
-        .required(),
-    password: Joi.string()
-        .min(8)
-        .required()
-});
-
 // Create new app user
 appUsersRouter.post('/signup', (request, response, next) => {
 
     // Validate the data before we create a new user
-    const { error } = signUpSchema.validate(request.body);
+    const { error } = signUpValidation(request.body);
     if (error) {
         return response.status(400).send({ 'message': error.details[0].message });
     }
@@ -105,24 +89,11 @@ appUsersRouter.post('/signup', (request, response, next) => {
     });
 });
 
-// Login validation schema
-const loginSchema = Joi.object({
-    username: Joi.string()
-        .empty(''),
-    email: Joi.string()
-        .empty('')
-        .email(),
-    password: Joi.string()
-        .min(8)
-        .required()
-})
-    .xor('username', 'email');
-
 // Login app user
 appUsersRouter.post('/login', (request, response, next) => {
 
     // Validate the data before we create a new user
-    const { error } = loginSchema.validate(request.body);
+    const { error } = loginValidation(request.body);
     if (error) {
         return response.status(400).send({ 'message': error.details[0].message });
     }
