@@ -6,6 +6,7 @@ module.exports = appUsersRouter;
 const db = require('../db');
 const { signUpValidation, loginValidation } = require('../validation');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 
 // Middleware to check that all the required fields are provided in the request
@@ -51,7 +52,7 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
 }); */
 
 // Create new app user
-appUsersRouter.post('/signup', (request, response, next) => {
+appUsersRouter.post('/signup', async (request, response, next) => {
 
     // Validate the data before we create a new user
     const { error } = signUpValidation(request.body);
@@ -62,37 +63,37 @@ appUsersRouter.post('/signup', (request, response, next) => {
     // Destructure new user details from the request body
     const { username, email, password } = request.body;
 
-    const saltRounds = 10;
+    // Hash plain-text password using bcrypt's async hash technique
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Get today's date
     const dateCreated = getTodaysDate();
     const dateModified = getTodaysDate();
 
-    // Hash plain-text password using bcrypt's async hash technique
-    bcrypt.hash(password, saltRounds, function (err, hashedPassword) {
-        if (err) {
-            next(err);
-        }
+    // Create new user
+    db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
 
-        db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING username, email', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
-            if (error) {
-                if (error.code === '23505') {
-                    if (error.constraint === 'app_user_username_key') {
-                        return response.status(400).send({ 'message': 'User with that username already exists' });
-                    } else if (error.constraint === 'app_user_email_key') {
-                        return response.status(400).send({ 'message': 'User with that email already exists' });
-                    }
+        if (error) {
+
+            // Send error details if user already in the database
+            if (error.code === '23505') {
+                if (error.constraint === 'app_user_username_key') {
+                    return response.status(400).send({ 'message': 'User with that username already exists' });
+                } else if (error.constraint === 'app_user_email_key') {
+                    return response.status(400).send({ 'message': 'User with that email already exists' });
                 }
-                next(error);
             }
-            console.log(results.rows);
-            response.status(201).json({ appUser: results.rows });
-        });
+            next(error);
+        }
+        response.status(201).json({ appUser: results.rows });
     });
 });
 
 // Login app user
 appUsersRouter.post('/login', (request, response, next) => {
 
-    // Validate the data before we create a new user
+    // Validate the data before we send a request to the db
     const { error } = loginValidation(request.body);
     if (error) {
         return response.status(400).send({ 'message': error.details[0].message });
@@ -101,43 +102,40 @@ appUsersRouter.post('/login', (request, response, next) => {
     // Destructure user details from request body
     const { username, email, password } = request.body;
 
+    // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
     let queryText;
     let values;
 
-    // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
-    if (username.length > 0) {
+    if (username) {
         queryText = 'SELECT * FROM app_user WHERE username = $1';
         values = [username];
-    } else if (email.length > 0) {
+    } else if (email) {
         queryText = 'SELECT * FROM app_user WHERE email = $1';
         values = [email];
     }
 
-    db.query(queryText, values, (error, results) => {
+    // Query the db with the user details
+    db.query(queryText, values, async (error, results) => {
         if (error) {
             next(error);
         }
 
+        // Send an error message if the user cannot be found
         if (!results.rows[0]) {
             //return response.status(400).send({'message': 'The user could not be found'});
             return response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         }
 
         // Compare user-inputted plain-text password with the hashed password stored in the db using bcrypt's async compare method
-        bcrypt.compare(password, results.rows[0].hashed_password, function (err, result) {
-            if (err) {
-                next(err);
-            }
-            //return response.status(400).send({'message': 'The password is incorrect'});
-            if (result === false) {
-                response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
-            } else {
-                /* const token = helper.generateToken(rows[0].id);
-                return response.status(200).send({ token }); */
-                results.rows[0].hashed_password = 'removed';
-                response.status(200).json({ appUser: results.rows });
-            }
-        });
+        const isValidPassword = await bcrypt.compare(password, results.rows[0].hashed_password);
+        if (!isValidPassword) {
+            response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+        }
+
+        /* const token = helper.generateToken(rows[0].id);
+        return response.status(200).send({ token }); */
+        results.rows[0].hashed_password = 'removed';
+        response.status(200).json({ appUser: results.rows });
     });
 });
 
