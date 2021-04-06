@@ -1,10 +1,13 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
 const appUsersRouter = express.Router();
 module.exports = appUsersRouter;
 
 // Centralise our data access for reuseability per the node-postgres library guide
 const db = require('../db');
+
+// Import modules
+const bcrypt = require('bcrypt');
+const Joi = require('joi');
 
 // Middleware to check that all the required fields are provided in the request
 const checkRequiredFields = (request, response, next) => {
@@ -48,15 +51,32 @@ appUsersRouter.get('/', checkRequiredFields, (request, response, next) => {
     });
 }); */
 
+// Sign up validation schema
+const signUpSchema = Joi.object({
+    username: Joi.string()
+        .alphanum()
+        .min(2)
+        .required(),
+    email: Joi.string()
+        .email()
+        .min(6)
+        .required(),
+    password: Joi.string()
+        .min(8)
+        .required()
+});
+
 // Create new app user
 appUsersRouter.post('/signup', (request, response, next) => {
 
-    const { username, email, password } = request.body;
-
-    // Validate required fields
-    if (!username || !email || !password || !username.length || !email.length || !password.length) {
-        return response.status(400).send({ 'message': 'Some values are missing' });
+    // Validate the data before we create a new user
+    const { error } = signUpSchema.validate(request.body);
+    if (error) {
+        return response.status(400).send({ 'message': error.details[0].message });
     }
+
+    // Destructure new user details from the request body
+    const { username, email, password } = request.body;
 
     const saltRounds = 10;
     const dateCreated = getTodaysDate();
@@ -85,15 +105,30 @@ appUsersRouter.post('/signup', (request, response, next) => {
     });
 });
 
+// Login validation schema
+const loginSchema = Joi.object({
+    username: Joi.string()
+        .empty(''),
+    email: Joi.string()
+        .empty('')
+        .email(),
+    password: Joi.string()
+        .min(8)
+        .required()
+})
+    .xor('username', 'email');
+
 // Login app user
 appUsersRouter.post('/login', (request, response, next) => {
 
-    const { username, email, password } = request.body;
-
-    // Validate required fields
-    if ((!username && !email) || (!password) || (!username.length && !email.length) || (!password.length)) {
-        return response.status(400).send({ 'message': 'Some values are missing' });
+    // Validate the data before we create a new user
+    const { error } = loginSchema.validate(request.body);
+    if (error) {
+        return response.status(400).send({ 'message': error.details[0].message });
     }
+
+    // Destructure user details from request body
+    const { username, email, password } = request.body;
 
     let queryText;
     let values;
@@ -133,7 +168,7 @@ appUsersRouter.post('/login', (request, response, next) => {
             }
         });
     });
-})
+});
 
 // Validate app user id
 appUsersRouter.param('appUserId', (request, response, next, id) => {
