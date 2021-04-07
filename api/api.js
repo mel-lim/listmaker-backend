@@ -8,9 +8,9 @@ apiRouter.get('', (request, response, next) => {
     response.json({ info: 'Node.js, Express, and Postgres API' });
 });
 
-const appUsersRouter = require('./appUsers');
-apiRouter.use('/appusers', appUsersRouter);
-
+const authRouter = require('../routes/auth');
+apiRouter.use('/appusers', authRouter);
+ 
 const tripsRouter = require('./trips');
 apiRouter.use('/trips', tripsRouter);
 
