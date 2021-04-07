@@ -96,7 +96,53 @@ authRouter.post('/login', (request, response, next) => {
         }
 
         // Create and assign a token to the user
-        const token = jwt.sign({ id: results.rows[0].id }, process.env.TOKEN_SECRET);
-        response.header('auth-token', token).send(token);
+        const token = jwt.sign({ id: results.rows[0].id }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
+
+        // Send the jwt in a http-only cookie
+        response.cookie('token', token, {
+            maxAge: 60 * 60 * 1000 * 12, // 12 hours
+            httpOnly: true,
+            //secure: true, 
+            sameSite: true
+        });
+
+        // Send a non-http cookie so the client can check whether the user is logged in or not
+        response.cookie('username', results.rows[0].username, {
+            maxAge: 60 * 60 * 1000 * 12, // 12 hours
+            sameSite: true
+        });
+
+        // Return the 200 status code and send the username in the response body
+        return response.status(200).send({ 'username': results.rows[0].username });
     });
+});
+
+// LOGOUT USER
+authRouter.get('/logout', (request, response, next) => {
+
+    try {
+        response.clearCookie('username', {
+            maxAge: 60 * 60 * 1000 * 12, // 12 hours
+            sameSite: true
+        });
+    
+        response.clearCookie('token', {
+            maxAge: 60 * 60 * 1000 * 12, // 12 hours
+            httpOnly: true,
+            //secure: true, 
+            sameSite: true
+        });
+    
+        return response.status(200).send({ 
+            'message': 'Log out successful', 
+            'isLoggedOut': true
+        });
+
+    } catch (err) {
+        response.status(400).send({ 
+            "message": "Unable to log out, try again",
+            'isLoggedOut': false
+        });
+    }
+    
 });
