@@ -5,24 +5,25 @@ module.exports = authRouter;
 // Centralise our data access for reuseability per the node-postgres library guide
 const db = require('../db');
 
-// Import validation functions
+// Import helper functions and custom middleware
 const { signUpValidation, loginValidation } = require('../validation');
+const verifyToken = require('../verifyToken');
 
 // Import node modules
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 // CREATE NEW USER
-authRouter.post('/signup', async (request, response, next) => {
+authRouter.post('/signup', async (req, res, next) => {
 
     // Validate the data before we create a new user
-    const { error } = signUpValidation(request.body);
+    const { error } = signUpValidation(req.body);
     if (error) {
-        return response.status(400).send({ 'message': error.details[0].message });
+        return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Destructure new user details from the request body
-    const { username, email, password } = request.body;
+    // Destructure new user details from the req body
+    const { username, email, password } = req.body;
 
     // Hash plain-text password using bcrypt's async hash technique
     const salt = await bcrypt.genSalt(10);
@@ -40,28 +41,28 @@ authRouter.post('/signup', async (request, response, next) => {
             // Send error details if user already in the database
             if (error.code === '23505') {
                 if (error.constraint === 'app_user_username_key') {
-                    return response.status(400).send({ 'message': 'User with that username already exists' });
+                    return res.status(400).send({ 'message': 'User with that username already exists' });
                 } else if (error.constraint === 'app_user_email_key') {
-                    return response.status(400).send({ 'message': 'User with that email already exists' });
+                    return res.status(400).send({ 'message': 'User with that email already exists' });
                 }
             }
             next(error);
         }
-        response.status(201).json({ appUser: results.rows });
+        res.status(201).json({ appUser: results.rows });
     });
 });
 
 // LOGIN USER
-authRouter.post('/login', (request, response, next) => {
+authRouter.post('/login', (req, res, next) => {
 
-    // Validate the data before we send a request to the db
-    const { error } = loginValidation(request.body);
+    // Validate the data before we send a req to the db
+    const { error } = loginValidation(req.body);
     if (error) {
-        return response.status(400).send({ 'message': error.details[0].message });
+        return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Destructure user details from request body
-    const { username, email, password } = request.body;
+    // Destructure user details from req body
+    const { username, email, password } = req.body;
 
     // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
     let queryText;
@@ -83,23 +84,23 @@ authRouter.post('/login', (request, response, next) => {
 
         // Send an error message if the user cannot be found
         if (!results.rows[0]) {
-            //return response.status(400).send({'message': 'The user could not be found'});
-            return response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+            //return res.status(400).send({'message': 'The user could not be found'});
+            return res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         } else if (!results.rows[0].hashed_password) {
-            return response.status(400).send({ 'message': 'Something else went wrong - please submit your issue using our contact form' });
+            return res.status(400).send({ 'message': 'Something else went wrong - please submit your issue using our contact form' });
         }
 
         // Compare user-inputted plain-text password with the hashed password stored in the db using bcrypt's async compare method
         const isValidPassword = await bcrypt.compare(password, results.rows[0].hashed_password);
         if (!isValidPassword) {
-            response.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+            res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         }
 
         // Create and assign a token to the user
         const token = jwt.sign({ id: results.rows[0].id }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
 
         // Send the jwt in a http-only cookie
-        response.cookie('token', token, {
+        res.cookie('token', token, {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             httpOnly: true,
             //secure: true, 
@@ -107,42 +108,61 @@ authRouter.post('/login', (request, response, next) => {
         });
 
         // Send a non-http cookie so the client can check whether the user is logged in or not
-        response.cookie('username', results.rows[0].username, {
+        res.cookie('username', results.rows[0].username, {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             sameSite: true
         });
 
-        // Return the 200 status code and send the username in the response body
-        return response.status(200).send({ 'username': results.rows[0].username });
+        // Return the 200 status code and send the username in the res body
+        return res.status(200).send({ 'username': results.rows[0].username });
     });
 });
 
 // LOGOUT USER
-authRouter.get('/logout', (request, response, next) => {
+authRouter.get('/logout', (req, res, next) => {
 
     try {
-        response.clearCookie('username', {
+        res.clearCookie('username', {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             sameSite: true
         });
     
-        response.clearCookie('token', {
+        res.clearCookie('token', {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             httpOnly: true,
             //secure: true, 
             sameSite: true
         });
     
-        return response.status(200).send({ 
+        return res.status(200).send({ 
             'message': 'Log out successful', 
             'isLoggedOut': true
         });
 
     } catch (err) {
-        response.status(400).send({ 
+        res.status(400).send({ 
             "message": "Unable to log out, try again",
             'isLoggedOut': false
         });
     }
     
+});
+
+// GET USER DETAILS
+authRouter.get('/accountdetails', verifyToken, (req, res, next) => {
+    console.log("successfully verified token and called next");
+    console.log(req.appUserId);
+    db.query('SELECT username, email FROM app_user WHERE id = $1',
+    [req.appUserId],
+    (error, results) => {
+        if (error) {
+            next(error);
+        } else if (results.rows.length) {
+            res.status(200).json({ 
+                'username': results.rows[0].username,
+            'email': results.rows[0].email});
+        } else {
+            res.status(404).send({'message': 'Your details could not be found'});
+        }
+    });
 });
