@@ -126,26 +126,26 @@ authRouter.get('/logout', (req, res, next) => {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             sameSite: true
         });
-    
+
         res.clearCookie('token', {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             httpOnly: true,
             //secure: true, 
             sameSite: true
         });
-    
-        return res.status(200).send({ 
-            'message': 'Log out successful', 
+
+        return res.status(200).send({
+            'message': 'Log out successful',
             'isLoggedOut': true
         });
 
     } catch (err) {
-        res.status(400).send({ 
+        res.status(400).send({
             "message": "Unable to log out, try again",
             'isLoggedOut': false
         });
     }
-    
+
 });
 
 // GET USER DETAILS
@@ -153,16 +153,17 @@ authRouter.get('/accountdetails', verifyToken, (req, res, next) => {
     console.log("successfully verified token and called next");
     console.log(req.appUserId);
     db.query('SELECT username, email FROM app_user WHERE id = $1',
-    [req.appUserId],
-    (error, results) => {
-        if (error) {
-            next(error);
-        } else if (results.rows.length) {
-            res.status(200).json({ 
-                'username': results.rows[0].username,
-            'email': results.rows[0].email});
-        } else {
-            res.status(404).send({'message': 'Your details could not be found'});
-        }
-    });
+        [req.appUserId],
+        (error, results) => {
+            if (error) {
+                next(error);
+            } else if (results.rows.length) {
+                res.status(200).json({
+                    'username': results.rows[0].username,
+                    'email': results.rows[0].email
+                });
+            } else {
+                res.status(404).send({ 'message': 'Your details could not be found' });
+            }
+        });
 });
