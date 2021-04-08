@@ -1,3 +1,6 @@
+// CENTRALISED DATABASE INTERACTIONS FILE
+// All of our db interactions will come through here
+
 const Pool = require('pg').Pool
 const dotenv = require('dotenv');
 
@@ -15,4 +18,9 @@ module.exports = {
     query: (text, params, callback) => {
         return pool.query(text, params, callback)
     },
+    getClient: (callback) => {
+        pool.connect((err, client, done) => {
+            callback(err, client, done);
+        })
+    }
 };

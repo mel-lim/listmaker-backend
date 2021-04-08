@@ -11,7 +11,7 @@ apiRouter.get('', (request, response, next) => {
 const authRouter = require('../routes/auth');
 apiRouter.use('/appusers', authRouter);
  
-const tripsRouter = require('./trips');
+const tripsRouter = require('../routes/trips');
 apiRouter.use('/trips', tripsRouter);
 
 const listsRouter = require('./lists');

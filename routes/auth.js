@@ -121,6 +121,7 @@ authRouter.post('/login', (req, res, next) => {
 // LOGOUT USER
 authRouter.get('/logout', (req, res, next) => {
 
+    // Delete the cookies from the user's browser upon logout
     try {
         res.clearCookie('username', {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
@@ -150,8 +151,8 @@ authRouter.get('/logout', (req, res, next) => {
 
 // GET USER DETAILS
 authRouter.get('/accountdetails', verifyToken, (req, res, next) => {
-    console.log("successfully verified token and called next");
-    console.log(req.appUserId);
+
+    // Query the db for the app user details
     db.query('SELECT username, email FROM app_user WHERE id = $1',
         [req.appUserId],
         (error, results) => {
