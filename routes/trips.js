@@ -48,7 +48,7 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
             }
             return !!err; // this is a double negation - therefore calling shouldAbort(err) will return boolean false if there is no error
         }
-        
+
         // Start the transaction on our checked out client 
         client.query('BEGIN', err => {
 
@@ -57,7 +57,7 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
             // Insert new trip into the trip table and return the trip id
             const insertTripText = 'INSERT INTO trip (name, category, duration) VALUES($1, $2, $3) RETURNING id';
             const insertTripValues = [tripName, tripCategory, tripDuration];
-            
+
             client.query(insertTripText, insertTripValues, (err, results) => {
 
                 if (shouldAbort(err)) return;
@@ -91,13 +91,11 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
 
 // Validate provided tripId to make sure it exists in the db
 tripsRouter.param('tripId', (req, res, next, tripId) => {
-    console.log(tripId);
-    console.log(typeof tripId); //string
 
     db.query('SELECT * FROM trip WHERE id = $1',
         [tripId],
         (err, results) => {
-            
+
             if (err) {
                 next(err);
             } else if (results.rows.length) {
@@ -112,21 +110,15 @@ tripsRouter.param('tripId', (req, res, next, tripId) => {
 
 // GENERATE NEW LISTS FOR TRIP
 tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
-    console.log("we are here");
-    console.log(req.tripDetails);
+    console.log("main function commenced");
 
-    // Validate the data before we generate new lists
-    console.log(typeof req.tripDetails.id); // number
-    console.log(typeof req.query.requestTemplate); // string
+    // Get the data from the trip details object attached to the request body by the trip id param method validation
     const tripId = req.tripDetails.id;
     const tripCategory = req.tripDetails.category;
     const tripDuration = req.tripDetails.duration;
     const requestTemplate = req.query.requestTemplate;
-    console.log(tripId);
-    console.log(tripCategory);
-    console.log(tripDuration);
-    console.log(requestTemplate);
 
+    // Validate the data before we generate new lists
     const { error } = generateNewListsValidation({ tripId, tripCategory, tripDuration, requestTemplate });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
@@ -164,16 +156,32 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
             // Get the template list titles
             const getListTitleText = "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)"
             const getListTitleValues = [tripCategory, tripDuration];
-            console.log(getListTitleText);
-            console.log(getListTitleValues);
 
             client.query(getListTitleText, getListTitleValues, (err, results) => {
-                console.log("querying has commenced");
+                console.log("we've commenced the query to the db for list titles");
                 if (shouldAbort(err)) return;
 
-                // Extract the trip id returned from this query
-                const lists = results.rows;
+                // Save the resulting array of lists
+                const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
                 console.log(lists);
+
+                // Iterate through the array of lists to get the template list items for each list
+                const allListItems = [];
+
+                lists.forEach(list => {
+
+                    const getListItemsText = "SELECT * FROM template_list_item WHERE list_id = $1";
+                    const getListItemsValue = [list.id];
+
+                    client.query(getListItemsText, getListItemsValue, (err, results) => {
+                        console.log("we've commenced the query to the db for list items");
+                        if (shouldAbort(err)) return;
+
+                        const listItems = results.rows;
+                        allListItems.push(listItems);
+                        console.log(listItems);
+                    });
+                });
 
                 // Commit the changes and close return the client to the pool
                 client.query('COMMIT', err => {
@@ -181,7 +189,7 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
                         console.error('Error committing transaction', err.stack);
                         res.status(400).send({ 'message': 'Lists could not be generated' });
                     }
-                    res.status(200).send({ 'lists': lists });
+                    res.status(200).send({ 'lists': lists, 'allListItems': allListItems });
                     done();
                 });
             });
