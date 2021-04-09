@@ -13,6 +13,7 @@ const verifyToken = (req, res, next) => {
     try {
         const payload = jwt.verify(token, process.env.TOKEN_SECRET);
         req.appUserId = payload.id;
+        console.log("user verified");
         next();
     } catch (err) {
         res.status(400).send({ "message": "Invalid token" });

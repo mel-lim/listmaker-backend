@@ -47,6 +47,19 @@ const newTripValidation = (data) => {
     return schema.validate(data);
 }
 
-module.exports.signUpValidation = signUpValidation;
-module.exports.loginValidation = loginValidation;
-module.exports.newTripValidation = newTripValidation;
+const generateNewListsValidation = (data) => {
+    const schema = Joi.object({
+        tripId: Joi.number()
+            .required(),
+        tripCategory: Joi.string()
+            .required(), // at the moment we only have one option - 'ski-tour'
+        tripDuration: Joi.string()
+            .required(), // this will be 'day' or 'overnight'
+        requestTemplate: Joi.string()
+            .required() // this will be 'true' or 'false' - the user will select whether they want to generate the lists with the template items or not
+    });
+
+    return schema.validate(data);
+}
+
+module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation }
