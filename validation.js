@@ -41,7 +41,9 @@ const newTripValidation = (data) => {
         tripCategory: Joi.string()
             .required(), // at the moment we only have one option - 'ski-tour'
         tripDuration: Joi.string()
-            .required() // this will be 'day' or 'overnight'
+            .required(), // this will be 'day' or 'overnight'
+        appUserId: Joi.number()
+            .required()
     });
 
     return schema.validate(data);
@@ -56,10 +58,43 @@ const generateNewListsValidation = (data) => {
         tripDuration: Joi.string()
             .required(), // this will be 'day' or 'overnight'
         requestTemplate: Joi.string()
-            .required() // this will be 'true' or 'false' - the user will select whether they want to generate the lists with the template items or not
+            .required(), // this will be 'true' or 'false' - the user will select whether they want to generate the lists with the template items or not
+        appUserId: Joi.number()
+            .required()
     });
 
     return schema.validate(data);
 }
 
-module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation }
+const saveListsValidation = (data) => {
+    const schema = Joi.object({
+        listTitles: Joi.array()
+            .items(
+                Joi.string()
+                    .required()
+            )
+            .required(),
+        listIds: Joi.array()
+            .items(
+                Joi.number()
+                    .required()
+            )
+            .required(),
+        tripId: Joi.number()
+            .required(),
+        listItemNames: Joi.array()
+            .items(
+                Joi.array()
+                    .items(
+                        Joi.string()
+                            .required()
+                    )
+            ),
+        appUserId: Joi.number()
+            .required()
+    });
+
+    return schema.validate(data);
+}
+
+module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation }

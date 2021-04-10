@@ -13,6 +13,3 @@ apiRouter.use('/appusers', authRouter);
  
 const tripsRouter = require('../routes/trips');
 apiRouter.use('/trips', tripsRouter);
-
-const listsRouter = require('./lists');
-apiRouter.use('/lists', listsRouter);

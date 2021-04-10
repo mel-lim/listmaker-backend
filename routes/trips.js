@@ -1,5 +1,7 @@
 const express = require('express');
 const tripsRouter = express.Router();
+
+// TRIPSROUTER IS MOUNTED ON APIROUTER AT '/trips'
 module.exports = tripsRouter;
 
 // IMPORT DB ACCESS DETAILS
@@ -9,18 +11,14 @@ const db = require('../db');
 const { newTripValidation, generateNewListsValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 
-// AUTHENTICATION MIDDLEWARE
-// All routes in this router requires the user to be authenticated
+// MOUNT THE AUTHENTICATION MIDDLEWARE - all routes in this router requires the user to be authenticated
 tripsRouter.use(verifyToken);
 
-// CREATE A NEW TRIP
-tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
+// IMPORT LISTS ROUTER
+const listsRouter = require('../routes/lists');
 
-    // Validate the data before we create a new trip
-    const { error } = newTripValidation(req.body);
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+// CREATE A NEW TRIP
+tripsRouter.post('/newtrip', (req, res, next) => {
 
     // Destructure new trip details from the req body
     let { tripName, tripCategory, tripDuration } = req.body;
@@ -30,6 +28,12 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
 
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
+
+    // Validate the data before we create a new trip
+    const { error } = newTripValidation({ tripName, tripCategory, tripDuration, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
 
     // Checkout/reserve a client for our transaction
     db.getClient((err, client, done) => {
@@ -74,7 +78,7 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
 
                     if (shouldAbort(err)) return;
 
-                    // Commit the changes and close return the client to the pool
+                    // Commit the changes and return the client to the pool
                     client.query('COMMIT', err => {
                         if (err) {
                             console.error('Error committing transaction', err.stack);
@@ -89,28 +93,52 @@ tripsRouter.post('/newtrip', verifyToken, (req, res, next) => {
     });
 });
 
-// Validate provided tripId to make sure it exists in the db
+// VALIDATE TRIPID PARAM AND AUTHORISE USER
 tripsRouter.param('tripId', (req, res, next, tripId) => {
-
+    
+    // Make sure trip exists
     db.query('SELECT * FROM trip WHERE id = $1',
         [tripId],
         (err, results) => {
 
             if (err) {
                 next(err);
+
             } else if (results.rows.length) {
-                req.tripDetails = results.rows[0];
-                next();
+
+                const tripDetails = results.rows[0];
+                console.log("tripId validated to exist in db");
+                
+                // Make sure the user making the request is the user who is associated with the trip
+                db.query('SELECT app_user_id FROM app_users_trips WHERE trip_id = $1', 
+                [tripId],
+                (err, results) => {
+                    
+                    if (err) {
+                        next(err);
+                    } 
+                    
+                    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+                    const appUserId = req.appUserId;
+
+                    // Compare the app user id - if they match, attach the tripDetails to the req and call next()
+                    if (appUserId === results.rows[0].app_user_id) {
+                        req.tripDetails = tripDetails;
+                        console.log("user authorised to access this trip");
+                        next();
+                    } else {
+                        res.status(403).send({ 'message': 'User not authorized' });
+                    }
+                });
             } else {
-                res.status(404).send('Trip not found');
+                res.status(404).send({'message': 'Trip not found'});
             }
         }
     );
 });
 
 // GENERATE NEW LISTS FOR TRIP
-tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
-    console.log("main function commenced");
+tripsRouter.get('/:tripId/generatenewlists', (req, res, next) => {
 
     // Get the data from the trip details object attached to the request body by the trip id param method validation
     const tripId = req.tripDetails.id;
@@ -118,19 +146,17 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
     const tripDuration = req.tripDetails.duration;
     const requestTemplate = req.query.requestTemplate;
 
-    // Validate the data before we generate new lists
-    const { error } = generateNewListsValidation({ tripId, tripCategory, tripDuration, requestTemplate });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-    console.log("data is validated");
-
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
 
+    // Validate the data before we generate new lists
+    const { error } = generateNewListsValidation({ tripId, tripCategory, tripDuration, requestTemplate, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
     // Checkout/reserve a client for our transaction
     db.getClient((err, client, done) => {
-        console.log("client has been checked out");
 
         // Define an error catcher
         const shouldAbort = err => {
@@ -149,8 +175,6 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
 
         // Start the transaction on our checked out client 
         client.query('BEGIN', err => {
-            console.log("transaction has begun");
-
             if (shouldAbort(err)) return;
 
             // Get the template list titles
@@ -158,12 +182,10 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
             const getListTitleValues = [tripCategory, tripDuration];
 
             client.query(getListTitleText, getListTitleValues, (err, results) => {
-                console.log("we've commenced the query to the db for list titles");
                 if (shouldAbort(err)) return;
 
                 // Save the resulting array of lists
                 const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
-                console.log(lists);
 
                 // Iterate through the array of lists to get the template list items for each list
                 const allListItems = [];
@@ -174,16 +196,14 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
                     const getListItemsValue = [list.id];
 
                     client.query(getListItemsText, getListItemsValue, (err, results) => {
-                        console.log("we've commenced the query to the db for list items");
                         if (shouldAbort(err)) return;
 
                         const listItems = results.rows;
                         allListItems.push(listItems);
-                        console.log(listItems);
                     });
                 });
 
-                // Commit the changes and close return the client to the pool
+                // Commit the changes and return the client to the pool
                 client.query('COMMIT', err => {
                     if (err) {
                         console.error('Error committing transaction', err.stack);
@@ -196,3 +216,6 @@ tripsRouter.get('/generatenewlists/:tripId', (req, res, next) => {
         });
     });
 });
+
+// MOUNT THE LISTS ROUTER AT THE LISTS ENDPOINT
+tripsRouter.use('/:tripId/lists', listsRouter);
