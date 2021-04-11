@@ -97,4 +97,17 @@ const saveListsValidation = (data) => {
     return schema.validate(data);
 }
 
-module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation }
+const fetchListsValidation = (data) => {
+    const schema = Joi.object({
+        tripId: Joi.number()
+            .required(),
+        appUserId: Joi.number()
+            .required()
+    });
+
+    return schema.validate(data);
+}
+
+
+
+module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation, fetchListsValidation }
