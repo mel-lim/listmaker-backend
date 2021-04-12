@@ -79,6 +79,7 @@ authRouter.post('/login', (req, res, next) => {
     // Query the db with the user details
     db.query(queryText, values, async (error, results) => {
         if (error) {
+            console.error(error);
             next(error);
         }
 
