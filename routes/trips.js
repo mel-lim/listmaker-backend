@@ -8,7 +8,7 @@ module.exports = tripsRouter;
 const db = require('../db');
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, generateNewListsValidation } = require('../validation');
+const { newTripValidation, generateNewListsValidation, getTripsValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 
 // MOUNT THE AUTHENTICATION MIDDLEWARE - all routes in this router requires the user to be authenticated
@@ -16,6 +16,31 @@ tripsRouter.use(verifyToken);
 
 // IMPORT LISTS ROUTER
 const listsRouter = require('../routes/lists');
+
+// FETCH ALL TRIPS FOR THE LOGGED IN USER
+tripsRouter.get('/alltrips', (req, res, next) => {
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data before we create a new trip
+    const { error } = getTripsValidation({ appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    db.query("WITH trip_master AS (SELECT * FROM trip INNER JOIN app_users_trips ON trip.id = app_users_trips.trip_id ) SELECT id, name, category, duration FROM trip_master WHERE app_user_id = $1", [appUserId], (err, results) => {
+        if (err) {
+            next(err);
+        }
+        if (!results.rows) {
+            res.status(404).json({ "message": "No trips found" });
+        }
+
+        console.log(results.rows);
+        res.status(200).json({ "trips": results.rows });
+    });
+
+})
 
 // CREATE A NEW TRIP
 tripsRouter.post('/newtrip', (req, res, next) => {

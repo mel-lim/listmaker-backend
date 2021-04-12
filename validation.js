@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const signUpValidation = (data) => {
+const signUpValidation = data => {
     const schema = Joi.object({
         username: Joi.string()
             .alphanum()
@@ -18,7 +18,7 @@ const signUpValidation = (data) => {
     return schema.validate(data);
 }
 
-const loginValidation = (data) => {
+const loginValidation = data => {
     const schema = Joi.object({
         username: Joi.string()
             .empty(''),
@@ -34,7 +34,7 @@ const loginValidation = (data) => {
     return schema.validate(data);
 }
 
-const newTripValidation = (data) => {
+const newTripValidation = data => {
     const schema = Joi.object({
         tripName: Joi.string()
             .empty(''),
@@ -49,7 +49,7 @@ const newTripValidation = (data) => {
     return schema.validate(data);
 }
 
-const generateNewListsValidation = (data) => {
+const generateNewListsValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
             .required(),
@@ -66,7 +66,7 @@ const generateNewListsValidation = (data) => {
     return schema.validate(data);
 }
 
-const saveListsValidation = (data) => {
+const saveListsValidation = data => {
     const schema = Joi.object({
         listTitles: Joi.array()
             .items(
@@ -97,7 +97,7 @@ const saveListsValidation = (data) => {
     return schema.validate(data);
 }
 
-const fetchListsValidation = (data) => {
+const fetchListsValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
             .required(),
@@ -108,6 +108,15 @@ const fetchListsValidation = (data) => {
     return schema.validate(data);
 }
 
+const getTripsValidation = data => {
+    const schema = Joi.object({
+        appUserId: Joi.number()
+            .required()
+    });
+
+    return schema.validate(data);
+}
 
 
-module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation, fetchListsValidation }
+
+module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation, fetchListsValidation, getTripsValidation }
