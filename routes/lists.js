@@ -165,6 +165,7 @@ listsRouter.get('/fetchlists', (req, res, next) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
     const tripId = req.tripDetails.id;
+    console.log(tripId);
 
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
@@ -175,66 +176,38 @@ listsRouter.get('/fetchlists', (req, res, next) => {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Checkout/reserve a client for our transaction
-    db.getClient((err, client, done) => {
+    // Get the list titles
+    const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
+    const getListTitleValues = [tripId, appUserId];
 
-        // Define an error catcher
-        const shouldAbort = err => {
-            if (err) {
-                console.error('Error in transaction', err.stack);
-                client.query('ROLLBACK', err => {
-                    if (err) {
-                        console.error('Error rolling back client', err.stack);
-                    }
-                    // release the client back to the pool
-                    done();
-                })
-            }
-            return !!err; // this is a double negation - therefore calling shouldAbort(err) will return boolean false if there is no error
+    db.query(getListTitleText, getListTitleValues, (err, results) => {
+        console.log("list table queried");
+        console.log(results.rows);
+
+        if (!results.rows || results.rows.length === 0) {
+            return res.status(404).json({ "message": "Lists cannot be found" });
         }
 
-        // Start the transaction on our checked out client 
-        client.query('BEGIN', err => {
-            if (shouldAbort(err)) return;
+        // Save the resulting array of lists
+        const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
 
-            // Get the template list titles
-            const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
-            const getListTitleValues = [tripId, appUserId];
+        // Iterate through the array of lists to get the template list items for each list
+        const allListItems = [];
 
-            client.query(getListTitleText, getListTitleValues, (err, results) => {
-                if (shouldAbort(err)) return;
+        lists.forEach((list, index, lists) => {
+            const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
+            const getListItemsValue = [list.id];
 
-                // Save the resulting array of lists
-                const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
+            db.query(getListItemsText, getListItemsValue, (err, results) => {
+                console.log("list item table queried");
 
-                // Iterate through the array of lists to get the template list items for each list
-                const allListItems = [];
+                const listItems = results.rows;
+                allListItems.push(listItems);
 
-                lists.forEach((list, index, lists) => {
-                    const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
-                    const getListItemsValue = [list.id];
-
-                    client.query(getListItemsText, getListItemsValue, (err, results) => {
-                        if (shouldAbort(err)) return;
-
-                        const listItems = results.rows;
-                        allListItems.push(listItems);
-                    });
-
-                    // When we get to the last iteration of the loop, call the commit command
-                    if (index === lists.length - 1) {
-
-                        // Commit the changes and return the client to the pool
-                        client.query('COMMIT', err => {
-                            if (err) {
-                                console.error('Error committing transaction', err.stack);
-                                res.status(400).send({ 'message': 'Lists could not be generated' });
-                            }
-                            res.status(200).send({ 'lists': lists, 'allListItems': allListItems });
-                            done();
-                        });
-                    }
-                });
+                if (index === lists.length - 1) {
+                    console.log(allListItems);
+                    return res.status(200).send({ 'lists': lists, 'allListItems': allListItems });
+                }
             });
         });
     });

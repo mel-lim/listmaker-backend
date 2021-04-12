@@ -42,6 +42,8 @@ const newTripValidation = data => {
             .required(), // at the moment we only have one option - 'ski-tour'
         tripDuration: Joi.string()
             .required(), // this will be 'day' or 'overnight'
+        requestTemplate: Joi.string()
+            .required(), // this will be 'yes' or 'no' - the user will select whether they want to generate the lists with the template items or not
         appUserId: Joi.number()
             .required()
     });
@@ -57,8 +59,6 @@ const generateNewListsValidation = data => {
             .required(), // at the moment we only have one option - 'ski-tour'
         tripDuration: Joi.string()
             .required(), // this will be 'day' or 'overnight'
-        requestTemplate: Joi.string()
-            .required(), // this will be 'true' or 'false' - the user will select whether they want to generate the lists with the template items or not
         appUserId: Joi.number()
             .required()
     });
@@ -87,7 +87,6 @@ const saveListsValidation = data => {
                 Joi.array()
                     .items(
                         Joi.string()
-                            .required()
                     )
             ),
         appUserId: Joi.number()
