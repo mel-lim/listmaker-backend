@@ -69,6 +69,7 @@ listsRouter.post('/savelists', (req, res, next) => {
 
             client.query(moveOldListsText, moveOldListsValues, (err, results) => {
                 if (shouldAbort(err)) return;
+
                 console.log("old lists have been moved into deleted_list table");
 
                 // 'MOVE' ALL THE OLD LIST ITEMS TO THE DELETED_LIST_ITEM TABLE
@@ -165,7 +166,6 @@ listsRouter.get('/fetchlists', (req, res, next) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
     const tripId = req.tripDetails.id;
-    console.log(tripId);
 
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
@@ -182,7 +182,6 @@ listsRouter.get('/fetchlists', (req, res, next) => {
 
     db.query(getListTitleText, getListTitleValues, (err, results) => {
         console.log("list table queried");
-        console.log(results.rows);
 
         if (!results.rows || results.rows.length === 0) {
             return res.status(404).json({ "message": "Lists cannot be found" });
@@ -193,6 +192,7 @@ listsRouter.get('/fetchlists', (req, res, next) => {
 
         // Iterate through the array of lists to get the template list items for each list
         const allListItems = [];
+        let counter = 0;
 
         lists.forEach((list, index, lists) => {
             const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
@@ -200,13 +200,13 @@ listsRouter.get('/fetchlists', (req, res, next) => {
 
             db.query(getListItemsText, getListItemsValue, (err, results) => {
                 console.log("list item table queried");
-
                 const listItems = results.rows;
                 allListItems.push(listItems);
-
-                if (index === lists.length - 1) {
+                counter += 1;
+                
+                if (counter === lists.length) {
                     console.log(allListItems);
-                    return res.status(200).send({ 'lists': lists, 'allListItems': allListItems });
+                    return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
                 }
             });
         });
