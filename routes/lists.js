@@ -11,6 +11,11 @@ const db = require('../db');
 // Import helper functions and custom middleware
 const { saveListsValidation, fetchListsValidation } = require('../validation');
 
+// Import js libraries 
+const dayjs = require('dayjs'); // For manipulating date/time
+const localizedFormat = require('dayjs/plugin/localizedFormat'); // Import and use dayjs plugin
+dayjs.extend(localizedFormat);
+
 // EVERYTHING COMING THROUGH LISTSROUTER WILL HAVE ALREADY BEEN AUTHENTICATED (using verifyToken function mounted on tripsRouter)
 // TRIPID WILL HAVE ALREADY BEEN VALIDATED AND THE USER AUTHORISED (using the param method on /:tripId in trips.js)
 
@@ -139,9 +144,10 @@ listsRouter.post('/savelists', (req, res, next) => {
                                                                 client.query('COMMIT', err => {
                                                                     if (err) {
                                                                         console.error('Error committing transaction', err.stack);
-                                                                        res.status(400).send({ 'message': 'Lists could not be saved' });
+                                                                        return res.status(400).send({ 'message': 'Lists could not be saved' });
                                                                     }
-                                                                    res.status(201).send({ 'message': 'Lists successfully saved' });
+                                                                    const currentTimeDate = dayjs().format('llll');
+                                                                    return res.status(201).send({ 'message': `Last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
                                                                     done();
                                                                 });
                                                             }

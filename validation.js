@@ -86,9 +86,9 @@ const saveListsValidation = data => {
             .items(
                 Joi.array()
                     .items(
-                        Joi.string()
+                        Joi.string().required()
                     )
-            ),
+            ).required(),
         appUserId: Joi.number()
             .required()
     });
