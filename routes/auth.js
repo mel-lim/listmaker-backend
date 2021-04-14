@@ -13,6 +13,11 @@ const verifyToken = require('../verifyToken');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+// Import js libraries 
+const dayjs = require('dayjs'); // For manipulating date/time
+const localizedFormat = require('dayjs/plugin/localizedFormat'); // Import and use dayjs plugin
+dayjs.extend(localizedFormat);
+
 // CREATE NEW USER
 authRouter.post('/signup', async (req, res, next) => {
 
@@ -105,17 +110,21 @@ authRouter.post('/login', (req, res, next) => {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
             httpOnly: true,
             //secure: true, 
-            sameSite: true
+            sameSite: true,
+            overwrite: true
         });
 
         // Send a non-http cookie so the client can check whether the user is logged in or not
         res.cookie('username', results.rows[0].username, {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            sameSite: true
+            sameSite: true, 
+            overwrite: true
         });
 
         // Return the 200 status code and send the username in the res body
-        return res.status(200).send({ 'username': results.rows[0].username });
+        const cookieExpiry = dayjs().add(1, 'minute').toISOString(); // WE ARE USING 1 MINUTE HERE FOR TESTING PURPOSES
+        //dayjs().add(12, 'hour');
+        return res.status(200).send({ 'username': results.rows[0].username, 'cookieExpiry': cookieExpiry });
     });
 });
 

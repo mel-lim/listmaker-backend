@@ -33,11 +33,10 @@ tripsRouter.get('/alltrips', (req, res, next) => {
             next(err);
         }
         if (!results.rows) {
-            res.status(404).json({ "message": "No trips found" });
+            return res.status(404).json({ "message": "No trips found" });
         }
 
-        console.log(results.rows);
-        res.status(200).json({ "trips": results.rows });
+        return res.status(200).json({ "trips": results.rows });
     });
 
 })
