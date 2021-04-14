@@ -39,6 +39,7 @@ contactRouter.post('', (req, res) => {
     contactEmail.sendMail(mail, (error) => {
         if (error) {
             res.json({ "status": "500", "message": "Something went wrong. Your message was not sent."});
+            // for some reason res.status not sending status through to front end
         } else {
             res.json({ "status": "201", "message": "Your message has been sent, thank you!" });
         }
