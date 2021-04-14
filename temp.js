@@ -16,11 +16,13 @@ console.log(listItemNames2); */
 
 
 
-// Import js libraries 
+/* // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
 
 const now = dayjs();
 const expiry = dayjs().add(1, 'minute');
 console.log(now.format(), expiry.format());
 console.log(expiry.diff(now));
-console.log(60*1000);
+console.log(60*1000); */
+
+console.log(typeof parseInt("600000"));

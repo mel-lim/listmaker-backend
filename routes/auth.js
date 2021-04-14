@@ -122,8 +122,8 @@ authRouter.post('/login', (req, res, next) => {
         });
 
         // Return the 200 status code and send the username in the res body
-        const cookieExpiry = dayjs().add(1, 'minute').toISOString(); // WE ARE USING 1 MINUTE HERE FOR TESTING PURPOSES
-        //dayjs().add(12, 'hour');
+        const cookieExpiry = dayjs().add(12, 'hour').toISOString(); // Tells the front-end when cookies / JWT will expire so it can prompt the user to refresh login credentials and get a new JWT and cookies
+        //.add(2, 'minute'); // WE WERE USING 2 MINUTES HERE FOR TESTING PURPOSES
         return res.status(200).send({ 'username': results.rows[0].username, 'cookieExpiry': cookieExpiry });
     });
 });
