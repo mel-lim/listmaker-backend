@@ -15,7 +15,7 @@ const verifyToken = require('../verifyToken');
 tripsRouter.use(verifyToken);
 
 // IMPORT LISTS ROUTER
-const listsRouter = require('../routes/lists');
+const listsRouter = require('./lists');
 
 // FETCH ALL TRIPS FOR THE LOGGED IN USER
 tripsRouter.get('/alltrips', (req, res, next) => {

@@ -13,3 +13,6 @@ apiRouter.use('/appusers', authRouter);
  
 const tripsRouter = require('../routes/trips');
 apiRouter.use('/trips', tripsRouter);
+
+const contactRouter = require('../routes/contact');
+apiRouter.use('/contact', contactRouter);
