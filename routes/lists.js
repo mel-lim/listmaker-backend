@@ -147,7 +147,7 @@ listsRouter.post('/savelists', (req, res, next) => {
                                                                         return res.status(400).send({ 'message': 'Lists could not be saved' });
                                                                     }
                                                                     const currentTimeDate = dayjs().format('llll');
-                                                                    return res.status(201).send({ 'message': `Last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
+                                                                    return res.status(201).send({ 'message': `Lists last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
                                                                     done();
                                                                 });
                                                             }
