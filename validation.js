@@ -34,6 +34,15 @@ const loginValidation = data => {
     return schema.validate(data);
 }
 
+const getTripsValidation = data => {
+    const schema = Joi.object({
+        appUserId: Joi.number()
+            .required()
+    });
+
+    return schema.validate(data);
+}
+
 const newTripValidation = data => {
     const schema = Joi.object({
         tripName: Joi.string()
@@ -51,20 +60,15 @@ const newTripValidation = data => {
     return schema.validate(data);
 }
 
-const generateNewListsValidation = data => {
+const saveTripDetailsValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
             .required(),
-        tripCategory: Joi.string()
-            .required(), // at the moment we only have one option - 'ski-tour'
-        tripDuration: Joi.string()
-            .required(), // this will be 'day' or 'overnight'
-        appUserId: Joi.number()
-            .required()
+        tripName: Joi.string().required(),
     });
 
     return schema.validate(data);
-}
+} 
 
 const saveListsValidation = data => {
     const schema = Joi.object({
@@ -107,15 +111,4 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
-const getTripsValidation = data => {
-    const schema = Joi.object({
-        appUserId: Joi.number()
-            .required()
-    });
-
-    return schema.validate(data);
-}
-
-
-
-module.exports = { signUpValidation, loginValidation, newTripValidation, generateNewListsValidation, saveListsValidation, fetchListsValidation, getTripsValidation }
+module.exports = { signUpValidation, loginValidation, getTripsValidation, newTripValidation, saveListsValidation, fetchListsValidation, saveTripDetailsValidation }

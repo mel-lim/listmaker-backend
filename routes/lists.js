@@ -39,7 +39,7 @@ listsRouter.post('/savelists', (req, res, next) => {
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
 
-    // Validate the data before we generate new lists
+    // Validate the data
     const { error } = saveListsValidation({ listTitles, listIds, tripId, listItemNames, appUserId });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
@@ -176,7 +176,7 @@ listsRouter.get('/fetchlists', (req, res, next) => {
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
 
-    // Validate the data before we generate new lists
+    // Validate the data
     const { error } = fetchListsValidation({ tripId, appUserId });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
@@ -211,7 +211,6 @@ listsRouter.get('/fetchlists', (req, res, next) => {
                 counter += 1;
                 
                 if (counter === lists.length) {
-                    console.log(allListItems);
                     return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
                 }
             });

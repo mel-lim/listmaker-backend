@@ -8,11 +8,17 @@ module.exports = tripsRouter;
 const db = require('../db');
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, generateNewListsValidation, getTripsValidation } = require('../validation');
+const { newTripValidation, getTripsValidation, saveTripDetailsValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
+
+// Import js libraries 
+const dayjs = require('dayjs'); // For manipulating date/time
+const localizedFormat = require('dayjs/plugin/localizedFormat'); // Import and use dayjs plugin
+dayjs.extend(localizedFormat);
 
 // MOUNT THE AUTHENTICATION MIDDLEWARE - all routes in this router requires the user to be authenticated
 tripsRouter.use(verifyToken);
+// THIS WORKS, BUT SHOULD THIS BE tripsRouter.all? I think they would work equivalently in this case, so I will leave this as is for now.
 
 // IMPORT LISTS ROUTER
 const listsRouter = require('./lists');
@@ -189,6 +195,34 @@ tripsRouter.param('tripId', (req, res, next, tripId) => {
         }
     );
 });
+
+// SAVE CHANGES TO TRIP DETAILS
+tripsRouter.put('/:tripId/savetripdetails', (req, res, next) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the other data from the request body sent by the client
+    const { tripName } = req.body;
+
+    // Validate the data
+    const { error } = saveTripDetailsValidation({ tripId, tripName });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    db.query('UPDATE trip SET name = $1 WHERE id = $2', [tripName, tripId], (err, results) => {
+        if (err) {
+            console.error('Error committing transaction', err.stack);
+            return res.status(400).json({ 'message': 'Trip details could not be saved' });
+        }
+        if (results.rowCount === 1) {
+            const currentTimeDate = dayjs().format('llll');
+            return res.status(200).json({ "message": `Trip details last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
+        }
+    });
+});
+
 
 // MOUNT THE LISTS ROUTER AT THE LISTS ENDPOINT
 tripsRouter.use('/:tripId/lists', listsRouter);
