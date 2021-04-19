@@ -8,7 +8,7 @@ module.exports = tripsRouter;
 const db = require('../db');
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, getTripsValidation, saveTripDetailsValidation } = require('../validation');
+const { newTripValidation, getTripsValidation, saveTripDetailsValidation, deleteTripValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 
 // Import js libraries 
@@ -223,6 +223,100 @@ tripsRouter.put('/:tripId/savetripdetails', (req, res, next) => {
     });
 });
 
+// DELETE TRIP
+tripsRouter.delete('/:tripId/deletetrip', (req, res, next) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Validate the data
+    const { error } = deleteTripValidation({ tripId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    // Checkout/reserve a client for our transaction
+    db.getClient((err, client, done) => {
+
+        // Define an error catcher
+        const shouldAbort = err => {
+            if (err) {
+                console.error('Error in transaction', err.stack);
+                client.query('ROLLBACK', err => {
+                    if (err) {
+                        console.error('Error rolling back client', err.stack);
+                    }
+                    // release the client back to the pool
+                    done();
+                })
+            }
+            return !!err; // this is a double negation - therefore calling shouldAbort(err) will return boolean false if there is no error
+        }
+
+        // Start the transaction on our checked out client 
+        client.query('BEGIN', err => {
+
+            if (shouldAbort(err)) return;
+
+            // Query the list table to find the list ids associated with this trip
+
+            client.query('SELECT id from list WHERE trip_id = $1', [tripId], (err, results) => {
+
+                if (shouldAbort(err)) return;
+
+                // Extract the list ids returned from this query
+                if (results.rows && results.rows.length) {
+
+                    const listIds = results.rows.map(item => item.id);
+                    console.log(listIds);
+
+                    listIds.forEach((listId, index, listIds) => {
+
+                        client.query("DELETE FROM list_item WHERE list_id = $1", [listId], (err, results) => {
+
+                            if (shouldAbort(err)) return;
+                            console.log('old list items have been deleted from the list_item table', listId);
+
+                            // Once we reach the last iteration of this loop, we will call the next nested query
+                            if (index === listIds.length - 1) {
+                                console.log("last loop interation");
+
+                                // DELETE THE OLD LISTS FROM THE LIST TABLE
+                                client.query("DELETE FROM list WHERE trip_id = $1", [tripId], (err, results) => {
+                                    if (shouldAbort(err)) return;
+                                    console.log("old lists have been deleted from list table");
+
+                                    // DELETE THE RELATIONSHIP BETWEEN TRIP AND APP_USER FROM THE APP_USERS_TRIPS TABLE
+                                    client.query("DELETE FROM app_users_trips WHERE trip_id = $1", [tripId], (err, results) => {
+                                        if (shouldAbort(err)) return;
+                                        console.log("relationship has been deleted");
+
+                                        client.query("DELETE FROM trip WHERE id = $1", [tripId], (err, results) => {
+                                            if (shouldAbort(err)) return;
+
+                                            if (results.rowCount === 1) {
+                                                console.log("trip has been deleted");
+
+                                                client.query('COMMIT', err => {
+                                                    if (err) {
+                                                        console.error('Error committing transaction', err.stack);
+                                                        res.status(400).send({ 'message': 'Trip could not be deleted' });
+                                                    }
+                                                    res.sendStatus(204);
+                                                    done();
+                                                });
+                                            }
+                                        });
+                                    });
+                                });
+                            }
+                        });
+                    });
+                }
+            });
+        });
+    });
+});
 
 // MOUNT THE LISTS ROUTER AT THE LISTS ENDPOINT
 tripsRouter.use('/:tripId/lists', listsRouter);
