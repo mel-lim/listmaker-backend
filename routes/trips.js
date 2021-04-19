@@ -119,32 +119,57 @@ tripsRouter.post('/newtrip', (req, res, next) => {
                         const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
 
                         const allListItems = [];
+                        if (requestTemplate === "no") {
 
-                        // Iterate through the array of lists to get the template list items for each list
-                        lists.forEach((list, index, lists) => {
+                            // Iterate through the array of lists to get the template list items for each list
+                            lists.forEach((list, index, lists) => {
 
-                            const getListItemsText = "SELECT * FROM template_list_item WHERE list_id = $1";
-                            const getListItemsValue = [list.id];
+                                    allListItems.push([{name: 'Edit me', list_id: list.id}]);
 
-                            client.query(getListItemsText, getListItemsValue, (err, results) => {
-                                if (shouldAbort(err)) return;
-
-                                const listItems = results.rows;
-                                allListItems.push(listItems);
+                                // On the last iteration, commit the changes and return the client to the pool
+                                if (index === lists.length - 1) {
+                                    client.query('COMMIT', err => {
+                                        if (err) {
+                                            console.error('Error committing transaction', err.stack);
+                                            res.status(400).send({ 'message': 'Lists could not be generated' });
+                                        }
+                                        res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
+                                        done();
+                                    });
+                                }
                             });
 
-                            // On the last iteration, commit the changes and return the client to the pool
-                            if (index === lists.length - 1) {
-                                client.query('COMMIT', err => {
-                                    if (err) {
-                                        console.error('Error committing transaction', err.stack);
-                                        res.status(400).send({ 'message': 'Lists could not be generated' });
-                                    }
-                                    res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
-                                    done();
+                        } else {
+                            // Iterate through the array of lists to get the template list items for each list
+                            lists.forEach((list, index, lists) => {
+
+                                const getListItemsText = "SELECT * FROM template_list_item WHERE list_id = $1";
+                                const getListItemsValue = [list.id];
+
+                                client.query(getListItemsText, getListItemsValue, (err, results) => {
+                                    if (shouldAbort(err)) return;
+
+                                    const listItems = results.rows;
+                                    console.log(listItems);
+                                    allListItems.push(listItems);
                                 });
-                            }
-                        });
+
+                                // On the last iteration, commit the changes and return the client to the pool
+                                if (index === lists.length - 1) {
+                                    client.query('COMMIT', err => {
+                                        if (err) {
+                                            console.error('Error committing transaction', err.stack);
+                                            res.status(400).send({ 'message': 'Lists could not be generated' });
+                                        }
+                                        res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
+                                        done();
+                                    });
+                                }
+                            });
+
+                        }
+
+
                     });
                 });
             });
