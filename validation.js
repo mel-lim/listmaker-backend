@@ -87,12 +87,6 @@ const saveListsValidation = data => {
                     .required()
             )
             .required(),
-        listIds: Joi.array()
-            .items(
-                Joi.number()
-                    .required()
-            )
-            .required(),
         tripId: Joi.number()
             .required(),
         listItemNames: Joi.array()
