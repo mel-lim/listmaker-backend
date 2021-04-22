@@ -166,10 +166,7 @@ tripsRouter.post('/newtrip', (req, res, next) => {
                                     });
                                 }
                             });
-
                         }
-
-
                     });
                 });
             });

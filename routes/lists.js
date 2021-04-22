@@ -71,130 +71,175 @@ listsRouter.post('/savelists', (req, res, next) => {
                 console.log("getting list ids");
                 if (shouldAbort(err)) return;
 
-                const listIds = results.rows.map(row => row.id);
-                console.log(listIds);
+                if (results.rows.length) {
 
-                // DELETE THE OLD LIST ITEMS FROM THE LIST_ITEM TABLE
-                listIds.forEach((listId, index, listIds) => {
-                    const deleteOldListItemsText = "DELETE FROM list_item WHERE list_id = $1";
-                    const deleteOldListItemsValues = [listId];
+                    const listIds = results.rows.map(row => row.id);
+                    console.log(listIds);
 
-                    client.query(deleteOldListItemsText, deleteOldListItemsValues, (err, results) => {
-                        if (shouldAbort(err)) return;
-                        console.log("old list items have been deleted from list_item table", listId);
+                    // DELETE THE OLD LIST ITEMS FROM THE LIST_ITEM TABLE
+                    listIds.forEach((listId, index, listIds) => {
+                        const deleteOldListItemsText = "DELETE FROM list_item WHERE list_id = $1";
+                        const deleteOldListItemsValues = [listId];
 
-                        // Once we reach the last iteration of this loop, we will call the next nested query
-                        if (index === listIds.length - 1) {
-                            console.log("last loop interation");
+                        client.query(deleteOldListItemsText, deleteOldListItemsValues, (err, results) => {
+                            if (shouldAbort(err)) return;
+                            console.log("old list items have been deleted from list_item table", listId);
 
-                            // DELETE THE OLD LISTS FROM THE LIST TABLE
-                            const deleteOldListsText = "DELETE FROM list WHERE trip_id = $1";
-                            const deleteOldListsValues = [tripId];
+                            // Once we reach the last iteration of this loop, we will call the next nested query
+                            if (index === listIds.length - 1) {
+                                console.log("last loop interation");
 
-                            client.query(deleteOldListsText, deleteOldListsValues, (err, results) => {
-                                if (shouldAbort(err)) return;
-                                console.log("old lists have been deleted from list table");
+                                // DELETE THE OLD LISTS FROM THE LIST TABLE
+                                const deleteOldListsText = "DELETE FROM list WHERE trip_id = $1";
+                                const deleteOldListsValues = [tripId];
 
-                                // ADD NEW LISTS TO THE LIST TABLE
-                                listTitles.forEach((listTitle, outerIndex, listTitles) => {
-                                    const insertNewListText = "INSERT INTO list (title, trip_id, app_user_id) VALUES ($1, $2, $3) RETURNING id";
-                                    const insertNewListValues = [listTitle, tripId, appUserId];
+                                client.query(deleteOldListsText, deleteOldListsValues, (err, results) => {
+                                    if (shouldAbort(err)) return;
+                                    console.log("old lists have been deleted from list table");
 
-                                    client.query(insertNewListText, insertNewListValues, (err, results) => {
-                                        if (shouldAbort(err)) return;
-                                        console.log("new lists have been inserted into list table", index);
-                                        const newListId = results.rows[0].id;
+                                    // ADD NEW LISTS TO THE LIST TABLE
+                                    listTitles.forEach((listTitle, outerIndex, listTitles) => {
+                                        const insertNewListText = "INSERT INTO list (title, trip_id, app_user_id) VALUES ($1, $2, $3) RETURNING id";
+                                        const insertNewListValues = [listTitle, tripId, appUserId];
 
-                                        // ADD NEW LIST ITEMS FOR THIS LIST TO THE LIST_ITEM TABLE
-                                        const thisListItemNames = listItemNames[outerIndex]; // Remember the indices match up between the listTitles array and the outside listItemNames array
-                                        console.log(thisListItemNames)
+                                        client.query(insertNewListText, insertNewListValues, (err, results) => {
+                                            if (shouldAbort(err)) return;
+                                            console.log("new lists have been inserted into list table", outerIndex);
+                                            const newListId = results.rows[0].id;
 
-                                        // Iterate through each list item name and add it to the list_item_table, linked to the list by its new list id
-                                        thisListItemNames.forEach((itemName, innerIndex, thisListItemNames) => {
-                                            const insertNewListItemText = "INSERT INTO list_item (name, list_id) VALUES ($1, $2)";
-                                            const insertNewListItemValues = [itemName, newListId];
+                                            // ADD NEW LIST ITEMS FOR THIS LIST TO THE LIST_ITEM TABLE
+                                            const thisListItemNames = listItemNames[outerIndex]; // Remember the indices match up between the listTitles array and the outside listItemNames array
+                                            console.log(thisListItemNames)
 
-                                            client.query(insertNewListItemText, insertNewListItemValues, (err, results) => {
-                                                if (shouldAbort(err)) return;
+                                            // Iterate through each list item name and add it to the list_item_table, linked to the list by its new list id
+                                            thisListItemNames.forEach((itemName, innerIndex, thisListItemNames) => {
+                                                const insertNewListItemText = "INSERT INTO list_item (name, list_id) VALUES ($1, $2)";
+                                                const insertNewListItemValues = [itemName, newListId];
 
-                                                console.log("new list item has been inserted into list table", outerIndex, innerIndex);
+                                                client.query(insertNewListItemText, insertNewListItemValues, (err, results) => {
+                                                    if (shouldAbort(err)) return;
 
-                                                // Once we reach the last iteration of the outside and inside loop, we will call the commit command
-                                                if (outerIndex === listTitles.length - 1 && innerIndex === thisListItemNames.length - 1) {
-                                                    console.log("last loop interation");
-                                                    // Commit the changes and return the client to the pool
-                                                    client.query('COMMIT', err => {
-                                                        if (err) {
-                                                            console.error('Error committing transaction', err.stack);
-                                                            return res.status(400).send({ 'message': 'Lists could not be saved' });
-                                                        }
-                                                        const currentTimeDate = dayjs().format('llll');
-                                                        return res.status(201).send({ 'message': `Lists last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
-                                                        done();
-                                                    });
-                                                }
+                                                    console.log("new list item has been inserted into list table", outerIndex, innerIndex);
+
+                                                    // Once we reach the last iteration of the outside and inside loop, we will call the commit command
+                                                    if (outerIndex === listTitles.length - 1 && innerIndex === thisListItemNames.length - 1) {
+                                                        console.log("last loop interation");
+                                                        // Commit the changes and return the client to the pool
+                                                        client.query('COMMIT', err => {
+                                                            if (err) {
+                                                                console.error('Error committing transaction', err.stack);
+                                                                return res.status(400).send({ 'message': 'Lists could not be saved' });
+                                                            }
+                                                            const currentTimeDate = dayjs().format('llll');
+                                                            return res.status(201).send({ 'message': `Lists last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
+                                                            done();
+                                                        });
+                                                    }
+                                                });
                                             });
                                         });
                                     });
                                 });
-                            });
-                        }
+                            }
+                        });
                     });
-                });
-            });
-        });
-    });
-});
+                } else {
+                    // ADD NEW LISTS TO THE LIST TABLE
+                    listTitles.forEach((listTitle, outerIndex, listTitles) => {
+                        const insertNewListText = "INSERT INTO list (title, trip_id, app_user_id) VALUES ($1, $2, $3) RETURNING id";
+                        const insertNewListValues = [listTitle, tripId, appUserId];
 
+                        client.query(insertNewListText, insertNewListValues, (err, results) => {
+                            if (shouldAbort(err)) return;
+                            console.log("new lists have been inserted into list table", outerIndex);
+                            const newListId = results.rows[0].id;
 
-// FETCH LISTS AND SEND TO CLIENT
-listsRouter.get('/fetchlists', (req, res, next) => {
+                            // ADD NEW LIST ITEMS FOR THIS LIST TO THE LIST_ITEM TABLE
+                            const thisListItemNames = listItemNames[outerIndex]; // Remember the indices match up between the listTitles array and the outside listItemNames array
+                            console.log(thisListItemNames)
 
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
+                            // Iterate through each list item name and add it to the list_item_table, linked to the list by its new list id
+                            thisListItemNames.forEach((itemName, innerIndex, thisListItemNames) => {
+                                const insertNewListItemText = "INSERT INTO list_item (name, list_id) VALUES ($1, $2)";
+                                const insertNewListItemValues = [itemName, newListId];
 
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
+                                client.query(insertNewListItemText, insertNewListItemValues, (err, results) => {
+                                    if (shouldAbort(err)) return;
 
-    // Validate the data
-    const { error } = fetchListsValidation({ tripId, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+                                    console.log("new list item has been inserted into list table", outerIndex, innerIndex);
 
-    // Get the list titles
-    const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
-    const getListTitleValues = [tripId, appUserId];
-
-    db.query(getListTitleText, getListTitleValues, (err, results) => {
-        console.log("list table queried");
-
-        if (!results.rows || results.rows.length === 0) {
-            return res.status(404).json({ "message": "Lists cannot be found" });
-        }
-
-        // Save the resulting array of lists
-        const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
-
-        // Iterate through the array of lists to get the template list items for each list
-        const allListItems = lists.map(list => []);
-
-        let counter = 0;
-
-        lists.forEach((list, index, lists) => {
-            const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
-            const getListItemsValue = [list.id];
-
-            db.query(getListItemsText, getListItemsValue, (err, results) => {
-                console.log("list item table queried");
-                const listItems = results.rows;
-                allListItems[index] = listItems;
-                counter += 1;
-
-                if (counter === lists.length) {
-                    return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
+                                    // Once we reach the last iteration of the outside and inside loop, we will call the commit command
+                                    if (outerIndex === listTitles.length - 1 && innerIndex === thisListItemNames.length - 1) {
+                                        console.log("last loop interation");
+                                        // Commit the changes and return the client to the pool
+                                        client.query('COMMIT', err => {
+                                            if (err) {
+                                                console.error('Error committing transaction', err.stack);
+                                                return res.status(400).send({ 'message': 'Lists could not be saved' });
+                                            }
+                                            const currentTimeDate = dayjs().format('llll');
+                                            return res.status(201).send({ 'message': `Lists last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
+                                            done();
+                                        });
+                                    }
+                                });
+                            });
+                        });
+                    });
                 }
             });
         });
     });
 });
+
+    // FETCH LISTS AND SEND TO CLIENT
+    listsRouter.get('/fetchlists', (req, res, next) => {
+
+        // Get the tripId from the trip details object attached to the request body by the trip id param validation
+        const tripId = req.tripDetails.id;
+
+        // Get the app user id from req.appUserId (set by the verifyToken middleware)
+        const appUserId = req.appUserId;
+
+        // Validate the data
+        const { error } = fetchListsValidation({ tripId, appUserId });
+        if (error) {
+            return res.status(400).send({ 'message': error.details[0].message });
+        }
+
+        // Get the list titles
+        const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
+        const getListTitleValues = [tripId, appUserId];
+
+        db.query(getListTitleText, getListTitleValues, (err, results) => {
+            console.log("list table queried");
+
+            if (!results.rows || results.rows.length === 0) {
+                return res.status(404).json({ "message": "Lists cannot be found" });
+            }
+
+            // Save the resulting array of lists
+            const lists = results.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
+
+            // Iterate through the array of lists to get the template list items for each list
+            const allListItems = lists.map(list => []);
+
+            let counter = 0;
+
+            lists.forEach((list, index, lists) => {
+                const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
+                const getListItemsValue = [list.id];
+
+                db.query(getListItemsText, getListItemsValue, (err, results) => {
+                    console.log("list item table queried");
+                    const listItems = results.rows;
+                    allListItems[index] = listItems;
+                    counter += 1;
+
+                    if (counter === lists.length) {
+                        return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
+                    }
+                });
+            });
+        });
+    });
