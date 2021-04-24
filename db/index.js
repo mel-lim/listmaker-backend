@@ -8,12 +8,12 @@ dotenv.config();
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL, 
-    ssl: true
-    /* user: process.env.DB_USER,
+    ssl: true,
+    user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_NAME,
     password: process.env.DB_PASS,
-    port: process.env.DB_PORT */
+    port: process.env.DB_PORT
 });
 
 module.exports = {
