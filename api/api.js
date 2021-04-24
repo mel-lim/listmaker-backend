@@ -17,9 +17,7 @@ apiRouter.get('/test', (request, response, next) => {
         if (error) {
             next(error);
         }
-
         response.status(200).json({ "trips": results.rows });
-
     });
 });
 
