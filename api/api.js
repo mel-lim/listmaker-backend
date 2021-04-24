@@ -20,12 +20,12 @@ apiRouter.get('/test', (request, response, next) => {
 
         response.status(200).json({ "trips": results.rows });
 
-
-})
+    });
+});
 
 const authRouter = require('../routes/auth');
 apiRouter.use('/appusers', authRouter);
- 
+
 const tripsRouter = require('../routes/trips');
 apiRouter.use('/trips', tripsRouter);
 
