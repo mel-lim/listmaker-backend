@@ -17,12 +17,14 @@ const pool = new Pool({
 });
 
 module.exports = {
-    query: (text, params, callback) => {
+    /* query: (text, params, callback) => {
         return pool.query(text, params, callback)
-    },
-    getClient: (callback) => {
+    }, */
+    query: (text, params) => pool.query(text, params),
+    /* getClient: (callback) => {
         pool.connect((err, client, done) => {
             callback(err, client, done);
         })
-    }
+    } */
+    getClient: () => pool.connect()
 };

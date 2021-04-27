@@ -1,9 +1,13 @@
 const express = require('express');
-const authRouter = express.Router();
-module.exports = authRouter;
 
-// Centralise our data access for reuseability per the node-postgres library guide
+// Import our data access code
 const db = require('../db');
+
+// Create a new express-promise-router (which has same API as the normal express router)
+const authRouter = express.Router();
+
+// Export the router to be mounted by the parent application
+module.exports = authRouter;
 
 // Import helper functions and custom middleware
 const { signUpValidation, loginValidation } = require('../validation');
@@ -39,22 +43,22 @@ authRouter.post('/signup', async (req, res, next) => {
     const dateModified = dateCreated;
 
     // Create new user
-    db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified', [username, email, hashedPassword, dateCreated, dateModified], (error, results) => {
+    try {
+        const { rows } = await db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified', [username, email, hashedPassword, dateCreated, dateModified]);
+        res.status(201).json({ appUser: rows[0] });
+    }
 
-        if (error) {
-
-            // Send error details if user already in the database
-            if (error.code === '23505') {
-                if (error.constraint === 'app_user_username_key') {
-                    return res.status(400).send({ 'message': 'User with that username already exists' });
-                } else if (error.constraint === 'app_user_email_key') {
-                    return res.status(400).send({ 'message': 'User with that email already exists' });
-                }
+    catch (error) {
+        // Send error details if user already in the database
+        if (error.code === '23505') {
+            if (error.constraint === 'app_user_username_key') {
+                return res.status(400).send({ 'message': 'User with that username already exists' });
+            } else if (error.constraint === 'app_user_email_key') {
+                return res.status(400).send({ 'message': 'User with that email already exists' });
             }
-            next(error);
         }
-        res.status(201).json({ appUser: results.rows });
-    });
+        next(error);
+    }
 });
 
 // LOGIN USER
@@ -178,3 +182,4 @@ authRouter.get('/accountdetails', verifyToken, (req, res, next) => {
             }
         });
 });
+
