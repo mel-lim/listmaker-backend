@@ -44,7 +44,11 @@ authRouter.post('/signup', async (req, res, next) => {
 
     // Create new user
     try {
-        const { rows } = await db.query('INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified', [username, email, hashedPassword, dateCreated, dateModified]);
+
+        const { rows } = await db.query(
+            'INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified',
+            [username, email, hashedPassword, dateCreated, dateModified]);
+
         res.status(201).json({ appUser: rows[0] });
     }
 
@@ -62,7 +66,7 @@ authRouter.post('/signup', async (req, res, next) => {
 });
 
 // LOGIN USER
-authRouter.post('/login', (req, res, next) => {
+authRouter.post('/login', async (req, res, next) => {
 
     // Validate the data before we send a req to the db
     const { error } = loginValidation(req.body);
@@ -85,29 +89,26 @@ authRouter.post('/login', (req, res, next) => {
         values = [email];
     }
 
-    // Query the db with the user details
-    db.query(queryText, values, async (error, results) => {
-        if (error) {
-            console.error(error);
-            next(error);
-        }
+    try {
 
-        // Send an error message if the user cannot be found
-        if (!results.rows[0]) {
-            //return res.status(400).send({'message': 'The user could not be found'});
+        // Query the db with the user details
+        const { rows } = await db.query(queryText, values);
+
+        // Send a client error message if the user cannot be found
+        if (!rows[0]) {
             return res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
-        } else if (!results.rows[0].hashed_password) {
+        } else if (!rows[0].hashed_password) {
             return res.status(400).send({ 'message': 'Something else went wrong - please submit your issue using our contact form' });
         }
 
         // Compare user-inputted plain-text password with the hashed password stored in the db using bcrypt's async compare method
-        const isValidPassword = await bcrypt.compare(password, results.rows[0].hashed_password);
-        if (!isValidPassword) {
-            res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+        const isValidPassword = await bcrypt.compare(password, rows[0].hashed_password);
+        if (!isValidPassword) { // if the passwords don't match, send a client error message
+            return res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         }
 
         // Create and assign a token to the user
-        const token = jwt.sign({ id: results.rows[0].id }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
+        const token = jwt.sign({ id: rows[0].id }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
 
         // Send the jwt in a http-only cookie
         res.cookie('token', token, {
@@ -118,18 +119,24 @@ authRouter.post('/login', (req, res, next) => {
             overwrite: true
         });
 
-        // Send a non-http cookie so the client can check whether the user is logged in or not
-        res.cookie('username', results.rows[0].username, {
+        // Send a non-http cookie so the browser can check whether the user is logged in or not
+        res.cookie('username', rows[0].username, {
             maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            sameSite: true, 
+            sameSite: true,
             overwrite: true
         });
 
-        // Return the 200 status code and send the username in the res body
         const cookieExpiry = dayjs().add(12, 'hour').toISOString(); // Tells the front-end when cookies / JWT will expire so it can prompt the user to refresh login credentials and get a new JWT and cookies
         //.add(2, 'minute'); // WE WERE USING 2 MINUTES HERE FOR TESTING PURPOSES
-        return res.status(200).send({ 'username': results.rows[0].username, 'cookieExpiry': cookieExpiry });
-    });
+
+        // Return the 200 status code and send the username in the res body
+        return res.status(200).send({ 'username': rows[0].username, 'cookieExpiry': cookieExpiry });
+    }
+
+    catch (error) {
+        console.log(error);
+        next(error);
+    }
 });
 
 // LOGOUT USER
@@ -164,22 +171,28 @@ authRouter.get('/logout', (req, res, next) => {
 });
 
 // GET USER DETAILS
-authRouter.get('/accountdetails', verifyToken, (req, res, next) => {
+authRouter.get('/accountdetails', verifyToken, async (req, res, next) => {
 
-    // Query the db for the app user details
-    db.query('SELECT username, email FROM app_user WHERE id = $1',
-        [req.appUserId],
-        (error, results) => {
-            if (error) {
-                next(error);
-            } else if (results.rows.length) {
-                res.status(200).json({
-                    'username': results.rows[0].username,
-                    'email': results.rows[0].email
-                });
-            } else {
-                res.status(404).send({ 'message': 'Your details could not be found' });
-            }
-        });
+    try {
+        // Query the db for the app user details
+        const { rows } = await db.query(
+            'SELECT username, email FROM app_user WHERE id = $1',
+            [req.appUserId]);
+
+        // If the user details cannot be found, send a client-error message
+        if (!rows[0]) {
+            return res.status(404).send({ 'message': 'Your details could not be found' });
+            
+        } else {
+            return res.status(200).json({
+                'username': rows[0].username,
+                'email': rows[0].email
+            });
+        }
+    }
+
+    catch (error) {
+        next(error);
+    }
 });
 
