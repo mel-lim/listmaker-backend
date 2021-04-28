@@ -1,11 +1,13 @@
 const express = require('express');
-const tripsRouter = express.Router();
-
-// TRIPSROUTER IS MOUNTED ON APIROUTER AT '/trips'
-module.exports = tripsRouter;
 
 // IMPORT DB ACCESS DETAILS
 const db = require('../db');
+
+// Create a new express-promise-router (which has same API as the normal express router)
+const tripsRouter = express.Router();
+
+// Export the router - TRIPSROUTER IS MOUNTED ON APIROUTER AT '/trips'
+module.exports = tripsRouter;
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
 const { newTripValidation, getTripsValidation, saveTripDetailsValidation, deleteTripValidation } = require('../validation');
@@ -24,7 +26,7 @@ tripsRouter.use(verifyToken);
 const listsRouter = require('./lists');
 
 // FETCH ALL TRIPS FOR THE LOGGED IN USER
-tripsRouter.get('/alltrips', (req, res, next) => {
+tripsRouter.get('/alltrips', async (req, res, next) => {
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
 
@@ -34,21 +36,28 @@ tripsRouter.get('/alltrips', (req, res, next) => {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    db.query("WITH trip_master AS (SELECT * FROM trip INNER JOIN app_users_trips ON trip.id = app_users_trips.trip_id ) SELECT id, name, category, duration FROM trip_master WHERE app_user_id = $1", [appUserId], (err, results) => {
-        if (err) {
-            next(err);
-        }
-        if (!results.rows) {
+    // Fetch all the trips for this user
+    try {
+
+        const { rows } = await db.query(
+            "WITH trip_master AS (SELECT * FROM trip INNER JOIN app_users_trips ON trip.id = app_users_trips.trip_id ) SELECT id, name, category, duration FROM trip_master WHERE app_user_id = $1",
+            [appUserId]);
+
+        if (!rows) {
             return res.status(404).json({ "message": "No trips found" });
         }
 
-        return res.status(200).json({ "trips": results.rows });
-    });
+        return res.status(200).json({ "trips": rows });
+    }
 
-})
+    catch (err) {
+        console.log(err);
+        next(err);
+    }
+});
 
 // CREATE A NEW TRIP AND GENERATE NEW LISTS
-tripsRouter.post('/newtrip', (req, res, next) => {
+tripsRouter.post('/newtrip', async (req, res, next) => {
 
     // Destructure new trip details from the req body
     let { tripName, tripCategory, tripDuration, requestTemplate } = req.body;
@@ -124,7 +133,7 @@ tripsRouter.post('/newtrip', (req, res, next) => {
                             // Iterate through the array of lists to get the template list items for each list
                             lists.forEach((list, index, lists) => {
 
-                                    allListItems.push([{name: 'Edit me', list_id: list.id}]);
+                                allListItems.push([{ name: 'Edit me', list_id: list.id }]);
 
                                 // On the last iteration, commit the changes and return the client to the pool
                                 if (index === lists.length - 1) {
