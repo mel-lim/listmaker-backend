@@ -95,8 +95,6 @@ const usernameCookieOptionsProduction = {
     overwrite: true
 };
 
-
-
 // LOGIN USER
 authRouter.post('/login', async (req, res, next) => {
 
