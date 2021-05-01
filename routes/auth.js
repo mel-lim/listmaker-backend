@@ -65,6 +65,38 @@ authRouter.post('/signup', async (req, res, next) => {
     }
 });
 
+// COOKIE CONFIG
+const MAX_AGE = 60 * 60 * 1000 * 12; // 12 hours
+const jwtCookieOptionsDev = {
+    maxAge: MAX_AGE, // 12 hours
+    httpOnly: true,
+    sameSite: true,
+    overwrite: true
+};
+const jwtCookieOptionsProduction = {
+    domain: 'kitcollab.netlify.app',
+    path: '/',
+    maxAge: MAX_AGE, // 12 hours
+    httpOnly: true,
+    secure: true, 
+    sameSite: true,
+    overwrite: true
+};
+const usernameCookieOptionsDev = {
+    maxAge: MAX_AGE, 
+    sameSite: true,
+    overwrite: true
+};
+const usernameCookieOptionsProduction = {
+    domain: 'kitcollab.netlify.app',
+    path: '/',
+    maxAge: MAX_AGE, 
+    sameSite: true,
+    overwrite: true
+};
+
+
+
 // LOGIN USER
 authRouter.post('/login', async (req, res, next) => {
 
@@ -111,20 +143,10 @@ authRouter.post('/login', async (req, res, next) => {
         const token = jwt.sign({ id: rows[0].id }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
 
         // Send the jwt in a http-only cookie
-        res.cookie('token', token, {
-            maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            httpOnly: true,
-            //secure: true, 
-            sameSite: true,
-            overwrite: true
-        });
+        res.cookie('token', token, process.env.NODE_ENV === "production" ? jwtCookieOptionsProduction : jwtCookieOptionsDev);
 
         // Send a non-http cookie so the browser can check whether the user is logged in or not
-        res.cookie('username', rows[0].username, {
-            maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            sameSite: true,
-            overwrite: true
-        });
+        res.cookie('username', rows[0].username, process.env.NODE_ENV === "production" ? usernameCookieOptionsProduction : usernameCookieOptionsDev);
 
         const cookieExpiry = dayjs().add(12, 'hour').toISOString(); // Tells the front-end when cookies / JWT will expire so it can prompt the user to refresh login credentials and get a new JWT and cookies
         //.add(2, 'minute'); // WE WERE USING 2 MINUTES HERE FOR TESTING PURPOSES
@@ -144,17 +166,9 @@ authRouter.get('/logout', (req, res, next) => {
 
     // Delete the cookies from the user's browser upon logout
     try {
-        res.clearCookie('username', {
-            maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            sameSite: true
-        });
+        res.clearCookie('username', process.env.NODE_ENV === "production" ? usernameCookieOptionsProduction : usernameCookieOptionsDev);
 
-        res.clearCookie('token', {
-            maxAge: 60 * 60 * 1000 * 12, // 12 hours
-            httpOnly: true,
-            //secure: true, 
-            sameSite: true
-        });
+        res.clearCookie('token', process.env.NODE_ENV === "production" ? jwtCookieOptionsProduction : jwtCookieOptionsDev);
 
         return res.status(200).send({
             'message': 'Log out successful',
