@@ -223,7 +223,7 @@ tripsRouter.put('/:tripId/savetripdetails', async (req, res) => {
 });
 
 // DELETE TRIP
-tripsRouter.delete('/:tripId/deletetrip', async (req, res, next) => {
+tripsRouter.delete('/:tripId/deletetrip', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
     const tripId = req.tripDetails.id;
@@ -283,6 +283,7 @@ tripsRouter.delete('/:tripId/deletetrip', async (req, res, next) => {
     }
 
     catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error committing transaction', err.stack);
         res.status(400).send({ 'message': 'Trip could not be deleted' });
     }
