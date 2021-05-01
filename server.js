@@ -15,8 +15,8 @@ app.use(morgan('dev'));
 app.use(cookieParser());
 
 // Route middleware
-const apiRouter = require('./api/api');
-app.use('/', apiRouter);
+const apiRouter = require('./routes/api');
+app.use('/api', apiRouter);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
