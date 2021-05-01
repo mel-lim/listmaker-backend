@@ -74,7 +74,7 @@ const jwtCookieOptionsDev = {
     overwrite: true
 };
 const jwtCookieOptionsProduction = {
-    domain: 'kitcollab.netlify.app',
+    domain: '.kitcollab.netlify.app',
     path: '/',
     maxAge: MAX_AGE, // 12 hours
     httpOnly: true,
@@ -88,7 +88,7 @@ const usernameCookieOptionsDev = {
     overwrite: true
 };
 const usernameCookieOptionsProduction = {
-    domain: 'kitcollab.netlify.app',
+    domain: '.kitcollab.netlify.app',
     path: '/',
     maxAge: MAX_AGE, 
     sameSite: true,
