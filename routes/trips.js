@@ -45,10 +45,6 @@ tripsRouter.get('/alltrips', async (req, res, next) => {
 
             console.log(rows);
 
-        if (!rows.length) {
-            return res.status(404).json({ "message": "No trips found" });
-        }
-
         return res.status(200).json({ "trips": rows });
     }
 
