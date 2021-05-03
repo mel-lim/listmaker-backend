@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, saveEditedListItemValidation, saveNewListItemValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -93,6 +93,44 @@ listsRouter.post('/savenewlistitem', async (req, res) => {
     catch (error) {
         console.error(error.stack);
         return res.status(500).send({ 'message': 'Edited list item could not be saved' });
+    }
+});
+
+// 'DELETE' LIST ITEM
+listsRouter.put('/deletelistitem', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the edited list item from the request body sent by the client
+    const { itemId } = req.body;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = deleteListItemValidation({ tripId, itemId, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    try {
+        // Update the list item
+        const result = await db.query(
+            "UPDATE list_item SET is_deleted = true WHERE id = $1",
+            [itemId]
+        );
+
+        if (!result || !result.rowCount) {
+            return res.status(500).send({ 'message': 'Edited list item could not be updated' });
+        }
+
+        return res.status(200).send({ 'message': 'List item deleted' });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'List item could not be deleted' });
     }
 });
 
