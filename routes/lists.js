@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, editListTitleValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, editListTitleValidation, newListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -54,6 +54,45 @@ listsRouter.put('/editlisttitle', async (req, res) => {
     catch (error) {
         console.error(error.stack);
         return res.status(500).send({ 'message': 'Edited list title could not be saved' });
+    }
+});
+
+// SAVE NEW LIST
+listsRouter.post('/savenewlist', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the edited list item from the request body sent by the client
+    const { newList } = req.body;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = newListValidation({ tripId, newList, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    try {
+        // Update the list
+        const result = await db.query(
+            "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id",
+            [newList.title, appUserId, tripId]
+        );
+
+        if (!result || !result.rowCount) {
+            return res.status(500).send({ 'message': 'Edited list item could not be inserted' });
+        }
+
+        // Send the new id back to the front end
+        return res.status(201).json(result.rows[0]);
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
     }
 });
 
