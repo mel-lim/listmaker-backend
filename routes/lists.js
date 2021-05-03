@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, editListTitleValidation, newListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -38,7 +38,7 @@ listsRouter.put('/editlisttitle', async (req, res) => {
     }
 
     try {
-        // Update the list item
+        // Update the list title
         const result = await db.query(
             "UPDATE list SET title = $1 WHERE id = $2",
             [editedListDetails.title, editedListDetails.id]
@@ -93,6 +93,58 @@ listsRouter.post('/savenewlist', async (req, res) => {
     catch (error) {
         console.error(error.stack);
         return res.status(500).send({ 'message': 'Edited list item could not be saved' });
+    }
+});
+
+// DELETE LIST
+listsRouter.delete('/deletelist', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the edited list item from the request body sent by the client
+    const { listId } = req.body;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = deleteListValidation({ tripId, listId, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    // Checkout/reserve a client for our transaction
+    const client = await db.getClient();
+    // note: we don't try/catch this because if connecting throws an exception
+    // we don't need to dispose of the client (it will be undefined)
+
+    try {
+        // Start the transaction on our checked out client 
+        await client.query('BEGIN');
+        console.log("transaction has begun");
+
+        // Delete the list items
+        await client.query("DELETE FROM list_item WHERE list_id = $1", [listId]);
+        console.log("list items have been deleted from list_item table");
+
+        // Delete the list
+        await client.query("DELETE FROM list WHERE id = $1", [listId]);
+        console.log("list has been deleted from list table");
+
+        await client.query('COMMIT');
+
+        return res.sendStatus(204);
+    }
+
+    catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error in transaction', error.stack);
+        return res.status(400).send({ 'message': 'List could not be deleted' });
+    }
+
+    finally {
+        client.release();
     }
 });
 

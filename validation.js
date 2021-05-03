@@ -127,6 +127,18 @@ const newListValidation = data => {
     return schema.validate(data);
 }
 
+const deleteListValidation = data => {
+    const schema = Joi.object({
+        tripId: Joi.number()
+            .required(),
+        listId: Joi.number()
+            .required(),
+        appUserId: Joi.number()
+            .required()
+    });
+    return schema.validate(data);
+}
+
 const saveEditedListItemValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
@@ -174,4 +186,4 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
-module.exports = { signUpValidation, loginValidation, getTripsValidation, newTripValidation, saveListsValidation, editListTitleValidation, newListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation, saveTripDetailsValidation, deleteTripValidation }
+module.exports = { signUpValidation, loginValidation, getTripsValidation, newTripValidation, saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation, saveTripDetailsValidation, deleteTripValidation }
