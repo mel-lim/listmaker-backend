@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, saveEditedListItemValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -18,6 +18,44 @@ dayjs.extend(localizedFormat);
 
 // EVERYTHING COMING THROUGH LISTSROUTER WILL HAVE ALREADY BEEN AUTHENTICATED (using verifyToken function mounted on tripsRouter)
 // TRIPID WILL HAVE ALREADY BEEN VALIDATED AND THE USER AUTHORISED (using the param method on /:tripId in trips.js)
+
+// SAVE EDITED LIST ITEM
+listsRouter.put('/saveeditedlistitem', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the edited list item from the request body sent by the client
+    const { editedListItem } = req.body;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = saveEditedListItemValidation({ tripId, editedListItem, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    try {
+        // Update the list item
+        const result = await db.query(
+            "UPDATE list_item SET name = $1 WHERE id = $2",
+            [editedListItem.name, editedListItem.id]
+        );
+
+        if (!result || !result.rowCount) {
+            return res.status(404).send({ 'message': 'Edited list item could not be found' });
+        }
+
+        return res.status(200).send({ 'message': 'List item updated' });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
+    }
+});
 
 // SAVE LISTS
 listsRouter.post('/savelists', async (req, res) => {
