@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, saveEditedListItemValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, saveEditedListItemValidation, saveNewListItemValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -45,10 +45,49 @@ listsRouter.put('/saveeditedlistitem', async (req, res) => {
         );
 
         if (!result || !result.rowCount) {
-            return res.status(404).send({ 'message': 'Edited list item could not be found' });
+            return res.status(500).send({ 'message': 'Edited list item could not be updated' });
         }
 
         return res.status(200).send({ 'message': 'List item updated' });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
+    }
+});
+
+// SAVE NEW LIST ITEM
+listsRouter.post('/savenewlistitem', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the edited list item from the request body sent by the client
+    const { newListItem } = req.body;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = saveNewListItemValidation({ tripId, newListItem, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    try {
+        // Update the list item
+        const result = await db.query(
+            "INSERT INTO list_item (name, list_id) VALUES ($1, $2) RETURNING id",
+            [newListItem.name, newListItem.list_id]
+        );
+
+        if (!result || !result.rowCount) {
+            return res.status(500).send({ 'message': 'Edited list item could not be inserted' });
+        }
+
+        // Send the new id back to the front end
+        return res.status(201).json(result.rows[0]);
     }
 
     catch (error) {
