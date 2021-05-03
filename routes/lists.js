@@ -315,7 +315,7 @@ listsRouter.get('/fetchlists', async (req, res) => {
 
     // Iterate through the array of lists to get the list items for each list
     lists.forEach(async (list, index, lists) => {
-        const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1";
+        const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1 AND is_deleted = false";
         const getListItemsValue = [list.id];
 
         const listItemsResults = await db.query(getListItemsText, getListItemsValue);
