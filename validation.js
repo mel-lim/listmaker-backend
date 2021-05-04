@@ -103,76 +103,49 @@ const saveListsValidation = data => {
     return schema.validate(data);
 }
 
-const editListTitleValidation = data => {
-    const schema = Joi.object({
-        tripId: Joi.number()
-            .required(),
-        editedListDetails: Joi.object()
-            .required(),
-        appUserId: Joi.number()
-            .required()
-    });
-    return schema.validate(data);
-}
-
 const newListValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
             .required(),
-        newList: Joi.object()
-            .required(),
         appUserId: Joi.number()
             .required()
     });
     return schema.validate(data);
 }
 
-const deleteListValidation = data => {
+const editListTitleValidation = editedListTitle => {
+    const schema = Joi.string().required();
+    return schema.validate(editedListTitle);
+}
+
+const deleteListValidation = listId => {
+    const schema = Joi.number().required();
+    return schema.validate(listId);
+}
+
+const newListItemValidation = data => {
     const schema = Joi.object({
-        tripId: Joi.number()
+        newItemName: Joi.string()
             .required(),
         listId: Joi.number()
-            .required(),
-        appUserId: Joi.number()
             .required()
     });
     return schema.validate(data);
 }
 
-const saveEditedListItemValidation = data => {
+const editListItemValidation = data => {
     const schema = Joi.object({
-        tripId: Joi.number()
-            .required(),
-        editedListItem: Joi.object()
-            .required(),
-        appUserId: Joi.number()
-            .required()
-    });
-    return schema.validate(data);
-}
-
-const saveNewListItemValidation = data => {
-    const schema = Joi.object({
-        tripId: Joi.number()
-            .required(),
-        newListItem: Joi.object()
-            .required(),
-        appUserId: Joi.number()
-            .required()
-    });
-    return schema.validate(data);
-}
-
-const deleteListItemValidation = data => {
-    const schema = Joi.object({
-        tripId: Joi.number()
+        editedItemName: Joi.string()
             .required(),
         itemId: Joi.number()
-            .required(),
-        appUserId: Joi.number()
             .required()
     });
     return schema.validate(data);
+}
+
+const deleteListItemValidation = itemId => {
+    const schema = Joi.number().required();
+    return schema.validate(itemId);
 }
 
 const fetchListsValidation = data => {
@@ -186,4 +159,19 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
-module.exports = { signUpValidation, loginValidation, getTripsValidation, newTripValidation, saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation, saveTripDetailsValidation, deleteTripValidation }
+module.exports = { 
+    signUpValidation, 
+    loginValidation, 
+    getTripsValidation, 
+    newTripValidation, 
+    saveListsValidation, 
+    newListValidation,
+    editListTitleValidation, 
+    deleteListValidation, 
+    newListItemValidation, 
+    editListItemValidation, 
+    deleteListItemValidation, 
+    fetchListsValidation, 
+    saveTripDetailsValidation, 
+    deleteTripValidation 
+}

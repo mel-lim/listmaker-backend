@@ -2,7 +2,7 @@ const express = require('express');
 const listsRouter = express.Router();
 
 // LISTSROUTER IS MOUNTED ON TRIPSROUTER
-// Complete route: '/trips/:tripId/lists'
+// Complete route: 'api/trips/:tripId/lists'
 module.exports = listsRouter;
 
 // IMPORT DB ACCESS DETAILS
@@ -19,20 +19,141 @@ dayjs.extend(localizedFormat);
 // EVERYTHING COMING THROUGH LISTSROUTER WILL HAVE ALREADY BEEN AUTHENTICATED (using verifyToken function mounted on tripsRouter)
 // TRIPID WILL HAVE ALREADY BEEN VALIDATED AND THE USER AUTHORISED (using the param method on /:tripId in trips.js)
 
-// SAVE EDITED LIST TITLE
-listsRouter.put('/editlisttitle', async (req, res) => {
+// IMPORT LIST ITEMS ROUTER
+const listItemsRouter = require('./listItems');
+
+// FETCH LISTS AND SEND TO CLIENT
+listsRouter.get('/fetchlists', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
     const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { editedListDetails } = req.body;
 
     // Get the app user id from req.appUserId (set by the verifyToken middleware)
     const appUserId = req.appUserId;
 
     // Validate the data
-    const { error } = editListTitleValidation({ tripId, editedListDetails, appUserId });
+    const { error } = fetchListsValidation({ tripId, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    // Get the list titles
+    const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
+    const getListTitleValues = [tripId, appUserId];
+
+    const listTitlesResults = await db.query(getListTitleText, getListTitleValues);
+    console.log("list table queried");
+
+    // If there are no lists, send 404 status and message
+    if (!listTitlesResults.rows || listTitlesResults.rows.length === 0) {
+        return res.status(404).json({ "message": "Lists cannot be found" });
+    }
+
+    // Assign the resulting array of lists to the variable lists
+    const lists = listTitlesResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
+
+    // Generate an empty array for each list to hold the list items
+    const allListItems = lists.map(list => []);
+    let counter = 0;
+
+    // Iterate through the array of lists to get the list items for each list
+    lists.forEach(async (list, index, lists) => {
+        const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1 AND is_deleted = false";
+        const getListItemsValue = [list.id];
+
+        const listItemsResults = await db.query(getListItemsText, getListItemsValue);
+        console.log("list item table queried");
+
+        const listItems = listItemsResults.rows;
+        allListItems[index] = listItems;
+        counter += 1;
+
+        // Once we reach the final iteration, we send the lists and list items back to the front end
+        if (counter === lists.length) {
+            return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
+        }
+    });
+});
+
+// CREATE NEW LIST
+listsRouter.post('/createnew', async (req, res) => {
+
+    // Get the tripId from the trip details object attached to the request body by the trip id param validation
+    const tripId = req.tripDetails.id;
+
+    // Get the app user id from req.appUserId (set by the verifyToken middleware)
+    const appUserId = req.appUserId;
+
+    // Validate the data
+    const { error } = newListValidation({ tripId, appUserId });
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    try {
+        // Insert a new list into the db titled, 'Untitled'
+        const result = await db.query(
+            "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id",
+            ['Untitled', appUserId, tripId]
+        );
+
+        if (!result || !result.rowCount) {
+            return res.status(500).send({ 'message': 'New list could not be created E0' });
+        }
+
+        // Send the new id back to the front end
+        return res.status(201).json(result.rows[0]);
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'New list could not be created E1' });
+    }
+});
+
+// VALIDATE LIST ID PARAM
+listsRouter.param('listId', async (req, res, next, listId) => {
+
+    try {
+        const listIdResult = await db.query('SELECT app_user_id, trip_id FROM list WHERE id = $1', [listId]);
+
+        // Make sure list exists
+        if (!listIdResult.rows.length) {
+            return res.status(404).send({ 'message': 'List not found' });
+        }
+        console.log("listId validated to exist in db");
+
+        // Make sure the list being queried is associated with the user and the trip
+        // The app user id is in req.appUserId (set by the verifyToken middleware)
+        // The param trip id is in req.tripDetails (set by trip id param validation)
+        if (
+            listIdResult.rows[0].app_user_id !== req.appUserId
+            || listIdResult.rows[0].trip_id !== req.tripDetails.id
+        ) {
+            return res.status(403).send({ 'message': 'This request is not allowed' }); // Forbidden
+        }
+
+        req.listId = listId;
+        console.log("list id validated");
+        next();
+    }
+
+    catch (error) {
+        next(error);
+    }
+});
+
+// EDIT LIST TITLE
+listsRouter.put('/:listId/edit', async (req, res) => {
+
+    // From the list id param validation
+    const listId = req.listId;
+
+    // Get the edited list title from the request body sent by the client
+    const { editedListTitle } = req.body;
+
+    // Validate the data
+    const { error } = editListTitleValidation(editedListTitle);
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -41,7 +162,7 @@ listsRouter.put('/editlisttitle', async (req, res) => {
         // Update the list title
         const result = await db.query(
             "UPDATE list SET title = $1 WHERE id = $2",
-            [editedListDetails.title, editedListDetails.id]
+            [editedListTitle, listId]
         );
 
         if (!result || !result.rowCount) {
@@ -57,59 +178,14 @@ listsRouter.put('/editlisttitle', async (req, res) => {
     }
 });
 
-// SAVE NEW LIST
-listsRouter.post('/savenewlist', async (req, res) => {
-
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { newList } = req.body;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = newListValidation({ tripId, newList, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    try {
-        // Update the list
-        const result = await db.query(
-            "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id",
-            [newList.title, appUserId, tripId]
-        );
-
-        if (!result || !result.rowCount) {
-            return res.status(500).send({ 'message': 'Edited list item could not be inserted' });
-        }
-
-        // Send the new id back to the front end
-        return res.status(201).json(result.rows[0]);
-    }
-
-    catch (error) {
-        console.error(error.stack);
-        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
-    }
-});
-
 // DELETE LIST
-listsRouter.delete('/deletelist', async (req, res) => {
+listsRouter.delete('/:listId/delete', async (req, res) => {
 
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { listId } = req.body;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
+    // From the list id param validation
+    const listId = req.listId;
 
     // Validate the data
-    const { error } = deleteListValidation({ tripId, listId, appUserId });
+    const { error } = deleteListValidation(listId);
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -140,7 +216,7 @@ listsRouter.delete('/deletelist', async (req, res) => {
     catch (error) {
         await client.query('ROLLBACK');
         console.error('Error in transaction', error.stack);
-        return res.status(400).send({ 'message': 'List could not be deleted' });
+        return res.status(500).send({ 'message': 'List could not be deleted' });
     }
 
     finally {
@@ -148,160 +224,16 @@ listsRouter.delete('/deletelist', async (req, res) => {
     }
 });
 
-// SAVE EDITED LIST ITEM
-listsRouter.put('/saveeditedlistitem', async (req, res) => {
+// MOUNT THE LIST ITEMS ROUTER AT THE LIST ITEMS ENDPOINT
+listsRouter.use('/:listId/listitems', listItemsRouter);
 
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
 
-    // Get the edited list item from the request body sent by the client
-    const { editedListItem } = req.body;
 
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
 
-    // Validate the data
-    const { error } = saveEditedListItemValidation({ tripId, editedListItem, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
 
-    try {
-        // Update the list item
-        const result = await db.query(
-            "UPDATE list_item SET name = $1 WHERE id = $2",
-            [editedListItem.name, editedListItem.id]
-        );
 
-        if (!result || !result.rowCount) {
-            return res.status(500).send({ 'message': 'Edited list item could not be updated' });
-        }
 
-        return res.status(200).send({ 'message': 'List item updated' });
-    }
-
-    catch (error) {
-        console.error(error.stack);
-        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
-    }
-});
-
-// SAVE NEW LIST ITEM
-listsRouter.post('/savenewlistitem', async (req, res) => {
-
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { newListItem } = req.body;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = saveNewListItemValidation({ tripId, newListItem, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    try {
-        // Update the list item
-        const result = await db.query(
-            "INSERT INTO list_item (name, list_id) VALUES ($1, $2) RETURNING id",
-            [newListItem.name, newListItem.list_id]
-        );
-
-        if (!result || !result.rowCount) {
-            return res.status(500).send({ 'message': 'Edited list item could not be inserted' });
-        }
-
-        // Send the new id back to the front end
-        return res.status(201).json(result.rows[0]);
-    }
-
-    catch (error) {
-        console.error(error.stack);
-        return res.status(500).send({ 'message': 'Edited list item could not be saved' });
-    }
-});
-
-// 'DELETE' LIST ITEM
-listsRouter.put('/deletelistitem', async (req, res) => {
-
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { itemId } = req.body;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = deleteListItemValidation({ tripId, itemId, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    try {
-        // Update the list item
-        const result = await db.query(
-            "UPDATE list_item SET is_deleted = true WHERE id = $1",
-            [itemId]
-        );
-
-        if (!result || !result.rowCount) {
-            return res.status(500).send({ 'message': 'List item could not be updated' });
-        }
-
-        return res.status(200).send({ 'message': 'List item deleted' });
-    }
-
-    catch (error) {
-        console.error(error.stack);
-        return res.status(500).send({ 'message': 'List item could not be deleted' });
-    }
-});
-
-// UNDO 'DELETE' LIST ITEM
-listsRouter.put('/undodeletelistitem', async (req, res) => {
-
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the edited list item from the request body sent by the client
-    const { itemId } = req.body;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = deleteListItemValidation({ tripId, itemId, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    try {
-        // Update the list item
-        const result = await db.query(
-            "UPDATE list_item SET is_deleted = false WHERE id = $1",
-            [itemId]
-        );
-
-        if (!result || !result.rowCount) {
-            return res.status(500).send({ 'message': 'List item could not be updated' });
-        }
-
-        return res.status(200).send({ 'message': 'List item un-deleted' });
-    }
-
-    catch (error) {
-        console.error(error.stack);
-        return res.status(500).send({ 'message': 'List item could not be un-deleted' });
-    }
-});
-
-// SAVE LISTS
+// SAVE LISTS - OBSOLETE ENDPOINT - TO BE REPURPOSED OR DELETED SOON
 listsRouter.post('/savelists', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
@@ -446,55 +378,3 @@ listsRouter.post('/savelists', async (req, res) => {
     }
 });
 
-// FETCH LISTS AND SEND TO CLIENT
-listsRouter.get('/fetchlists', async (req, res) => {
-
-    // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = fetchListsValidation({ tripId, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    // Get the list titles
-    const getListTitleText = "SELECT id, title FROM list WHERE trip_id = $1 AND app_user_id = $2"
-    const getListTitleValues = [tripId, appUserId];
-
-    const listTitlesResults = await db.query(getListTitleText, getListTitleValues);
-    console.log("list table queried");
-
-    // If there are no lists, send 404 status and message
-    if (!listTitlesResults.rows || listTitlesResults.rows.length === 0) {
-        return res.status(404).json({ "message": "Lists cannot be found" });
-    }
-
-    // Assign the resulting array of lists to the variable lists
-    const lists = listTitlesResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
-
-    // Generate an empty array for each list to hold the list items
-    const allListItems = lists.map(list => []);
-    let counter = 0;
-
-    // Iterate through the array of lists to get the list items for each list
-    lists.forEach(async (list, index, lists) => {
-        const getListItemsText = "SELECT * FROM list_item WHERE list_id = $1 AND is_deleted = false";
-        const getListItemsValue = [list.id];
-
-        const listItemsResults = await db.query(getListItemsText, getListItemsValue);
-        console.log("list item table queried");
-
-        const listItems = listItemsResults.rows;
-        allListItems[index] = listItems;
-        counter += 1;
-
-        // Once we reach the final iteration, we send the lists and list items back to the front end
-        if (counter === lists.length) {
-            return res.status(200).json({ 'lists': lists, 'allListItems': allListItems });
-        }
-    });
-});
