@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, saveEditedListItemValidation, saveNewListItemValidation, deleteListItemValidation, fetchListsValidation } = require('../validation');
+const { saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, fetchListsValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -52,6 +52,9 @@ listsRouter.get('/fetchlists', async (req, res) => {
     // Assign the resulting array of lists to the variable lists
     const lists = listTitlesResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
 
+    // Sort the lists in place, by index - this is the order in which they will be rendered in the browser
+    lists.sort((a, b) => a.id - b.id);
+
     // Generate an empty array for each list to hold the list items
     const allListItems = lists.map(list => []);
     let counter = 0;
@@ -65,6 +68,8 @@ listsRouter.get('/fetchlists', async (req, res) => {
         console.log("list item table queried");
 
         const listItems = listItemsResults.rows;
+        // Sort the list items in place by id
+        listItems.sort((a, b) => a.id - b.id);
         allListItems[index] = listItems;
         counter += 1;
 
