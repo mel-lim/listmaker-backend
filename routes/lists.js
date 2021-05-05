@@ -133,7 +133,7 @@ listsRouter.param('listId', async (req, res, next, listId) => {
             return res.status(403).send({ 'message': 'This request is not allowed' }); // Forbidden
         }
 
-        req.listId = listId;
+        req.listId = parseInt(listId);
         console.log("list id validated");
         next();
     }

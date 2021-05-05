@@ -56,6 +56,7 @@ listItemsRouter.post('/addnew', async (req, res) => {
 // VALIDATE LIST ITEM ID PARAM
 listItemsRouter.param('itemId', async (req, res, next, itemId) => {
     try {
+
         const itemIdResult = await db.query('SELECT list_id FROM list_item WHERE id = $1', [itemId]);
 
         // Make sure list exists
@@ -81,7 +82,7 @@ listItemsRouter.param('itemId', async (req, res, next, itemId) => {
 });
 
 // EDIT LIST ITEM
-listItemsRouter.put('/edit', async (req, res) => {
+listItemsRouter.put('/:itemId/edit', async (req, res) => {
 
     // Get the edited list item from the request body sent by the client
     const { editedItemName } = req.body;
@@ -116,7 +117,7 @@ listItemsRouter.put('/edit', async (req, res) => {
 });
 
 // 'DELETE' LIST ITEM
-listItemsRouter.put('/delete', async (req, res) => {
+listItemsRouter.put('/:itemId/delete', async (req, res) => {
 
     // From itemId param validation
     const itemId = req.itemId;
@@ -148,7 +149,7 @@ listItemsRouter.put('/delete', async (req, res) => {
 });
 
 // UNDO 'DELETE' LIST ITEM
-listItemsRouter.put('/undodelete', async (req, res) => {
+listItemsRouter.put('/:itemId/undodelete', async (req, res) => {
 
     // From itemId param validation
     const itemId = req.itemId;
