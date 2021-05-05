@@ -10,7 +10,7 @@ const tripsRouter = express.Router();
 module.exports = tripsRouter;
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, getTripsValidation, saveTripDetailsValidation, deleteTripValidation } = require('../validation');
+const { newTripValidation, getTripsValidation, editTripDetailsValidation, deleteTripValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 
 // Import js libraries 
@@ -189,22 +189,22 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
 
 
 // SAVE CHANGES TO TRIP DETAILS
-tripsRouter.put('/:tripId/savetripdetails', async (req, res) => {
+tripsRouter.put('/:tripId/edittripdetails', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
     const tripId = req.tripDetails.id;
 
     // Get the other data from the request body sent by the client
-    const { tripName } = req.body;
+    const { editedTripName } = req.body;
 
     // Validate the data
-    const { error } = saveTripDetailsValidation({ tripId, tripName });
+    const { error } = editTripDetailsValidation({ tripId, editedTripName });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
     try {
-        const { rowCount } = await db.query('UPDATE trip SET name = $1 WHERE id = $2', [tripName, tripId]);
+        const { rowCount } = await db.query('UPDATE trip SET name = $1 WHERE id = $2', [editedTripName, tripId]);
         if (rowCount === 1) {
             const currentTimeDate = dayjs().format('llll');
             return res.status(200).json({ "message": `Trip details last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });

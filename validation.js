@@ -60,11 +60,11 @@ const newTripValidation = data => {
     return schema.validate(data);
 }
 
-const saveTripDetailsValidation = data => {
+const editTripDetailsValidation = data => {
     const schema = Joi.object({
         tripId: Joi.number()
             .required(),
-        tripName: Joi.string().required(),
+        editedTripName: Joi.string().required(),
     });
 
     return schema.validate(data);
@@ -159,19 +159,19 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
-module.exports = { 
-    signUpValidation, 
-    loginValidation, 
-    getTripsValidation, 
-    newTripValidation, 
-    saveListsValidation, 
+module.exports = {
+    signUpValidation,
+    loginValidation,
+    getTripsValidation,
+    newTripValidation,
+    editTripDetailsValidation,
+    saveListsValidation,
     newListValidation,
-    editListTitleValidation, 
-    deleteListValidation, 
-    newListItemValidation, 
-    editListItemValidation, 
-    deleteListItemValidation, 
-    fetchListsValidation, 
-    saveTripDetailsValidation, 
-    deleteTripValidation 
+    editListTitleValidation,
+    deleteListValidation,
+    newListItemValidation,
+    editListItemValidation,
+    deleteListItemValidation,
+    fetchListsValidation,
+    deleteTripValidation
 }
