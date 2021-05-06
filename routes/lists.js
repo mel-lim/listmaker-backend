@@ -98,7 +98,7 @@ listsRouter.post('/createnew', async (req, res) => {
     try {
         // Insert a new list into the db titled, 'Untitled'
         const result = await db.query(
-            "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id, title",
             ['Untitled', appUserId, tripId]
         );
 

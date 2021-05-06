@@ -221,7 +221,7 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
 });
 
 
-// SAVE CHANGES TO TRIP DETAILS
+// EDIT TRIP DETAILS
 tripsRouter.put('/:tripId/edittripdetails', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
