@@ -43,7 +43,7 @@ tripsRouter.get('/alltrips', async (req, res, next) => {
             "WITH trip_master AS (SELECT * FROM trip INNER JOIN app_users_trips ON trip.id = app_users_trips.trip_id ) SELECT id, name, category, duration FROM trip_master WHERE app_user_id = $1",
             [appUserId]);
 
-            console.log(rows);
+        console.log(rows);
 
         return res.status(200).json({ "trips": rows });
     }
@@ -80,67 +80,100 @@ tripsRouter.post('/newtrip', async (req, res) => {
     try {
         // Start the transaction on our checked out client 
         await client.query('BEGIN');
+        console.log("transaction has begun");
 
         // Insert new trip into the trip table and return the trip id
-        const insertTripText = 'INSERT INTO trip (name, category, duration) VALUES($1, $2, $3) RETURNING id';
-        const insertTripValues = [tripName, tripCategory, tripDuration];
-        const tripIdResult = await client.query(insertTripText, insertTripValues);
+        const tripIdResult = await client.query(
+            'INSERT INTO trip (name, category, duration) VALUES($1, $2, $3) RETURNING id',
+            [tripName, tripCategory, tripDuration]
+        );
+        console.log("new trip has been inserted");
 
         // Extract the trip id returned from this query
         const tripId = tripIdResult.rows[0].id;
 
         // Record the relationship in the app_users_trips junction table
-        const insertAppUserTripText = 'INSERT INTO app_users_trips(app_user_id, trip_id) VALUES ($1, $2)';
-        const insertAppUserTripValues = [appUserId, tripId];
-        await client.query(insertAppUserTripText, insertAppUserTripValues);
+        await client.query(
+            'INSERT INTO app_users_trips(app_user_id, trip_id) VALUES ($1, $2)',
+            [appUserId, tripId]
+        );
+        console.log("relationship has been recorded in app_users_trips");
 
         // Get the template list titles
-        const getListTitleText = "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)"
-        const getListTitleValues = [tripCategory, tripDuration];
-        const listsResults = await client.query(getListTitleText, getListTitleValues);
+        const templateListResults = await client.query(
+            "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
+            [tripCategory, tripDuration]
+        );
+        console.log("template list results have been obtained");
 
         // Save the resulting array of lists
-        const lists = listsResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
+        const templateLists = templateListResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
 
-        // Initialise empty array to hold list item data
+        // Initialise empty arrays to hold list and list item data
+        const lists = [];
         const allListItems = [];
 
-        // If user does not want their lists to be generated with template/suggested list items
-        if (requestTemplate === "no") {
+        // Iterate through the array of lists
+        templateLists.forEach(async (templateList, templateListIndex, templateLists) => {
 
-            // Iterate through the array of lists to add an 'edit me' item for each list
-            lists.forEach(async (list, index, lists) => {
+            // Insert each template list into the list table
+            const listResult = await client.query(
+                "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id, title",
+                [templateList.title, appUserId, tripId]
+            );
+            // Add the list {id: XX, title: XX} to the lists array
+            const list = listResult.rows[0];
+            lists.push(list);
+            console.log(list);
 
-                allListItems.push([{ name: 'Edit me', list_id: list.id }]);
+            // Initialise listItems array
+            let templateListItems = [];
 
-                // On the last iteration, commit the changes and return the client to the pool
-                if (index === lists.length - 1) {
+            // If user does not want their lists to be generated with template/suggested list items
+            if (requestTemplate === "no") {
+                // Add a placeholder list item named 'Edit me' to each list
+                templateListItems = [{ name: 'Edit me', list_id: list.id }];
+
+                // If the user wants their lists to be generated with template / suggested list items
+            } else {
+                // Get the template list items for each list
+                const templateListItemResults = await client.query(
+                    "SELECT * FROM template_list_item WHERE list_id = $1",
+                    [templateList.id]
+                );
+                templateListItems = templateListItemResults.rows;
+            }
+            console.log("templateListItems have been obtained");
+
+            // Initialise a listItems array to hold the list items
+            let listItems = [];
+
+            // Insert each template list item into the list_item table
+            templateListItems.forEach(async (templateListItem, templateListItemIndex, templateListItems) => {
+                const listItemResults = await client.query(
+                    "INSERT INTO list_item (name, list_id) VALUES ($1, $2) RETURNING *",
+                    [templateListItem.name, list.id]
+                );
+
+                // Add list item to array of list items for this list
+                const listItem = listItemResults.rows[0];
+                listItems.push(listItem);
+                // [{id: XX, title: XX, list_id: XX, is_checked: XX, is_deleted: XX}, {...}, {...}, ...]
+
+                // On the last iteration of the templateListItems loop, add array of list items to the allListItems array that will get returned to the front end
+                if (templateListItemIndex === templateListItems.length - 1) {
+                    allListItems.push(listItems);
+                    console.log("templateListItems have been inserted into the list_item table");
+                }
+
+                // On the last iteration of both loops, commit the changes and return the client to the pool
+                if (templateListIndex === templateLists.length - 1 && templateListItemIndex === templateListItems.length - 1) {
                     await client.query('COMMIT');
-
+                    console.log("commited");
                     res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
                 }
             });
-
-        } else { // If the user does want their lists to be generated with template / suggested list items
-
-            // Iterate through the array of lists to get the template list items for each list
-            lists.forEach(async (list, index, lists) => {
-                const getListItemsText = "SELECT * FROM template_list_item WHERE list_id = $1";
-                const getListItemsValue = [list.id];
-                const listItemsResults = await client.query(getListItemsText, getListItemsValue);
-
-                const listItems = listItemsResults.rows;
-                console.log(listItems);
-                allListItems.push(listItems);
-
-                // On the last iteration, commit the changes and return the client to the pool
-                if (index === lists.length - 1) {
-                    await client.query('COMMIT');
-
-                    res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
-                }
-            });
-        }
+        });
     }
 
     catch (error) {
