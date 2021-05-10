@@ -78,19 +78,19 @@ const jwtCookieOptionsProduction = {
     path: '/',
     maxAge: MAX_AGE, // 12 hours
     httpOnly: true,
-    secure: true, 
+    secure: true,
     sameSite: true,
     overwrite: true
 };
 const usernameCookieOptionsDev = {
-    maxAge: MAX_AGE, 
+    maxAge: MAX_AGE,
     sameSite: true,
     overwrite: true
 };
 const usernameCookieOptionsProduction = {
     domain: '.kitcollab.netlify.app',
     path: '/',
-    maxAge: MAX_AGE, 
+    maxAge: MAX_AGE,
     sameSite: true,
     overwrite: true
 };
@@ -179,7 +179,6 @@ authRouter.get('/logout', (req, res, next) => {
             'isLoggedOut': false
         });
     }
-
 });
 
 // GET USER DETAILS
@@ -194,7 +193,7 @@ authRouter.get('/accountdetails', verifyToken, async (req, res, next) => {
         // If the user details cannot be found, send a client-error message
         if (!rows[0]) {
             return res.status(404).send({ 'message': 'Your details could not be found' });
-            
+
         } else {
             return res.status(200).json({
                 'username': rows[0].username,
@@ -208,3 +207,66 @@ authRouter.get('/accountdetails', verifyToken, async (req, res, next) => {
     }
 });
 
+// Generate random username
+const generateGuestUserDetails = (usernameLength) => {
+    const randomUsernameArray = [];
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const charactersLength = characters.length;
+    for (let i = 0; i < usernameLength; i++) {
+        randomUsernameArray.push(characters.charAt(Math.floor(Math.random() * charactersLength)));
+    }
+    const username = randomUsernameArray.join('');
+    const email = `${username}@kitcollabguest.com`;
+    const password = username;
+    return { username, email, password };
+}
+
+const tryAsGuest = async (req, res, next) => {
+
+    // Destructure new user details from the random user details generator - let's get a 5-letter username
+    const { username, email, password } = generateGuestUserDetails(5);
+
+    // Hash plain-text password using bcrypt's async hash technique
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Get today's date
+    const dateCreated = new Date();
+    const dateModified = dateCreated;
+    
+    try {
+        // Insert guest user into db
+        const { rows } = await db.query(
+            'INSERT INTO app_user (username, email, hashed_password, date_created, date_modified, is_guest) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [username, email, hashedPassword, dateCreated, dateModified, true]);
+
+        const appUserId = rows[0].id;
+
+        // Create and assign a token to the user
+        const token = jwt.sign({ id: appUserId }, process.env.TOKEN_SECRET, { expiresIn: 120 }); // 60 seconds to test
+
+        // Send the jwt in a http-only cookie
+        res.cookie('token', token, process.env.NODE_ENV === "production" ? jwtCookieOptionsProduction : jwtCookieOptionsDev);
+
+        // Send a non-http cookie so the browser can check whether the user is logged in or not
+        res.cookie('username', username, process.env.NODE_ENV === "production" ? usernameCookieOptionsProduction : usernameCookieOptionsDev);
+
+        const guestCookieExpiry = dayjs().add(12, 'hour').toISOString(); // Tells the front-end when cookies / JWT will expire so it can prompt the user to refresh login credentials and get a new JWT and cookies
+        //.add(2, 'minute'); // WE WERE USING 2 MINUTES HERE FOR TESTING PURPOSES
+
+        // Return the 200 status code and send the username in the res body
+        return res.status(200).send({ 'username': username, 'guestCookieExpiry': guestCookieExpiry });
+    }
+
+    catch (error) {
+        console.log(error);
+        // Send error details if user already in the database
+        if (error.code === '23505' && error.constraint === 'app_user_username_key') {
+            useAsGuest(req, res, next);
+        }
+    }
+    next(error);
+}
+
+// GENERATE GUEST USER
+authRouter.post('/tryasguest', tryAsGuest);

@@ -1,2 +1,5 @@
 ALTER TABLE list_item
 ADD COLUMN is_deleted BOOLEAN DEFAULT false;
+
+ALTER TABLE app_user
+ADD COLUMN is_guest BOOLEAN DEFAULT false;
