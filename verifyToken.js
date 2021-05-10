@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-// CUSTOM MIDDLEWARE TO VERIFY THE JWT TOKEN AND AUTHORIZE THE USER
+// CUSTOM MIDDLEWARE TO VERIFY THE JWT TOKEN AND AUTHORIZE THE USER, AFTER USER HAS LOGGED IN
 const verifyToken = (req, res, next) => {
 
     // Get the token from the cookie sent by the browser in the request

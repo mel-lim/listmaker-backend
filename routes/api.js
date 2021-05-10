@@ -7,6 +7,9 @@ apiRouter.get('', (request, response) => {
     response.json({ info: 'kit collab api' });
 });
 
+const adminRouter = require('./admin');
+apiRouter.use('/admin', adminRouter);
+
 const authRouter = require('./auth');
 apiRouter.use('/appusers', authRouter);
 
