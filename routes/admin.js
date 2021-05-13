@@ -40,6 +40,7 @@ const checkUsernameOrEmailExists = async (req, res, next) => {
         value = [email];
     }
 
+    try {
     // Query the app user table
     const result = await db.query(`SELECT id, username, email, date_created, date_modified, is_guest FROM app_user WHERE ${identifier} = $1`, value);
 
@@ -50,6 +51,11 @@ const checkUsernameOrEmailExists = async (req, res, next) => {
     // If the app user exists and call next
     req.appUser = result.rows[0]; // Attach the appUser details to the req 
     next();
+} 
+catch (error) {
+    console.error(error.stack);
+    res.status(500).send({ "message": "Could not get app user details" });
+}
 }
 
 // GET APP USER ID BY USERNAME OR EMAIL
@@ -59,7 +65,22 @@ adminRouter.get('/findappuser', checkUsernameOrEmailExists, async (req, res) => 
 
 // ADD ADMIN
 adminRouter.get('/grantadminstatus', checkUsernameOrEmailExists, async (req, res) => {
+    // Get the appUser id from the checkUsernameOrEmailExists middleware
+    const appUserId = req.appUser.id;
+    const result = await db.query("UPDATE app_user SET is_admin = true WHERE id = $1", [appUserId]);
+    console.log(result);
 
+    res.status(200).send({ "message": "User granted admin privileges" });
+});
+
+// REMOVE ADMIN
+adminRouter.get('/revokeadminstatus', checkUsernameOrEmailExists, async (req, res) => {
+    // Get the appUser id from the checkUsernameOrEmailExists middleware
+    const appUserId = req.appUser.id;
+    const result = await db.query("UPDATE app_user SET is_admin = false WHERE id = $1", [appUserId]);
+    console.log(result);
+
+    res.status(200).send({ "message": "Admin privileges revoked" });
 });
 
 

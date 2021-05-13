@@ -5,18 +5,15 @@ const db = require('./db');
 const verifyAdmin = async (req, res, next) => {
 
     try {
-        // Get an array of the admin usernames from the admin table
-        const adminUsernameResults = await db.query("SELECT username FROM admin");
-        const adminUsernames = adminUsernameResults.rows.map(row => row.username);
-        console.log(adminUsernames);
-
         // Get the app user id of the current user - set by verifyToken at req.appUserId
         const appUserId = req.appUserId;
 
-        const { rows } = await db.query("SELECT username FROM app_user WHERE id = $1", [appUserId]);
-        console.log(rows[0].username);
-
-        if (adminUsernames.includes(rows[0].username)) {
+        // Check whether the app user is marked as an admin in the app_user table
+        const { rows } = await db.query("SELECT is_admin FROM app_user WHERE id = $1", [appUserId]);
+        console.log(rows[0]);
+        
+        const isAdmin = rows[0].is_admin;
+        if (isAdmin) { // If the user is marked as admin
             console.log("admin verified");
             next();
             
