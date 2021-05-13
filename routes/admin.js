@@ -9,9 +9,6 @@ const adminRouter = express.Router();
 // Export the router to be mounted by the parent application
 module.exports = adminRouter;
 
-// Import js libraries 
-const dayjs = require('dayjs'); // For manipulating date/time
-
 // Import helper functions and custom middleware
 const { findAppUserValidation, deleteUserValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
@@ -20,43 +17,54 @@ const verifyAdmin = require('../verifyAdmin');
 // MOUNT THE AUTHENTICATION AND AUTHORIZATION MIDDLEWARE - all routes in this router requires the user to be authenticated and authorized as ADMIN
 adminRouter.use(verifyToken, verifyAdmin);
 
-// GET APP USER ID BY USERNAME OR EMAIL
-adminRouter.get('/findappuser', async (req, res) => {
-    // Get the username from the request body
+// MIDDLEWARE FUNCTION TO CHECK THAT USERNAME/EMAIL IN QUESTION EXISTS IN DB
+const checkUsernameOrEmailExists = async (req, res, next) => {
+    // Get the username and email from the request body
     const { username, email } = req.body;
 
-    // Validate the username
+    // Validate the username and email (we only want one or the other, not both)
     const { error } = findAppUserValidation({ username, email });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
-    let queryText;
-    let values;
+    // Detect whether the information provided is a username or email and set the text and variable for the SQL query accordingly
+    let identifier;
+    let value;
 
     if (username) {
-        queryText = 'SELECT id FROM app_user WHERE username = $1';
-        values = [username];
+        identifier = 'username';
+        value = [username];
     } else if (email) {
-        queryText = 'SELECT id FROM app_user WHERE email = $1';
-        values = [email];
+        identifier = 'email';
+        value = [email];
     }
 
     // Query the app user table
-    const result = await db.query(queryText, values);
+    const result = await db.query(`SELECT id, username, email, date_created, date_modified, is_guest FROM app_user WHERE ${identifier} = $1`, value);
 
     if (!result.rows.length) { // If there is no result, the app user does not exist
         return res.status(404).send({ "message": "App user by that username / email not found" });
     }
 
-    return res.status(200).json({ appUserId: result.rows[0].id });
+    // If the app user exists and call next
+    req.appUser = result.rows[0]; // Attach the appUser details to the req 
+    next();
+}
+
+// GET APP USER ID BY USERNAME OR EMAIL
+adminRouter.get('/findappuser', checkUsernameOrEmailExists, async (req, res) => {
+    res.status(200).json({ appUser: req.appUser });
 });
 
 // ADD ADMIN
+adminRouter.get('/grantadminstatus', checkUsernameOrEmailExists, async (req, res) => {
+
+});
+
 
 // MIDDLEWARE FUNCTION TO CHECK THAT USER IN QUESTION EXISTS IN DB
-const checkUserExists = async (req, res, next) => {
+const checkAppUserIdExists = async (req, res, next) => {
     // Get the app user id from the request body
     const { appUserIdToDelete } = req.body;
 
@@ -79,7 +87,7 @@ const checkUserExists = async (req, res, next) => {
 }
 
 // TEST ENDPOINT - GET A SPECIFIC USER
-adminRouter.get('/getspecificuser', checkUserExists, async (req, res) => {
+adminRouter.get('/getspecificuser', checkAppUserIdExists, async (req, res) => {
     res.status(200).json({ appUserIdToDelete: req.appUserIdToDelete });
 });
 
@@ -181,7 +189,7 @@ const deleteAppUser = async appUserIdToDelete => {
 }
 
 // DELETE A USER BY ID (AND ALL THE ASSOCIATED TRIPS, LISTS, LIST ITEMS ETC)
-adminRouter.delete('/deletespecificuser', checkUserExists, async (req, res) => {
+adminRouter.delete('/deletespecificuser', checkAppUserIdExists, async (req, res) => {
     // Get the app user id from the request body (see the checkUserExists middleware)
     const appUserIdToDelete = req.appUserIdToDelete;
 
