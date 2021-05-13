@@ -41,21 +41,22 @@ const checkUsernameOrEmailExists = async (req, res, next) => {
     }
 
     try {
-    // Query the app user table
-    const result = await db.query(`SELECT id, username, email, date_created, date_modified, is_guest FROM app_user WHERE ${identifier} = $1`, value);
+        // Query the app user table
+        const result = await db.query(`SELECT id, username, email, date_created, date_modified, is_guest FROM app_user WHERE ${identifier} = $1`, value);
 
-    if (!result.rows.length) { // If there is no result, the app user does not exist
-        return res.status(404).send({ "message": "App user by that username / email not found" });
+        if (!result.rows.length) { // If there is no result, the app user does not exist
+            return res.status(404).send({ "message": "App user by that username / email not found" });
+        }
+
+        // If the app user exists and call next
+        req.appUser = result.rows[0]; // Attach the appUser details to the req 
+        next();
     }
 
-    // If the app user exists and call next
-    req.appUser = result.rows[0]; // Attach the appUser details to the req 
-    next();
-} 
-catch (error) {
-    console.error(error.stack);
-    res.status(500).send({ "message": "Could not get app user details" });
-}
+    catch (error) {
+        console.error(error.stack);
+        res.status(500).send({ "message": "Could not get app user details" });
+    }
 }
 
 // GET APP USER ID BY USERNAME OR EMAIL
@@ -67,20 +68,34 @@ adminRouter.get('/findappuser', checkUsernameOrEmailExists, async (req, res) => 
 adminRouter.get('/grantadminstatus', checkUsernameOrEmailExists, async (req, res) => {
     // Get the appUser id from the checkUsernameOrEmailExists middleware
     const appUserId = req.appUser.id;
-    const result = await db.query("UPDATE app_user SET is_admin = true WHERE id = $1", [appUserId]);
-    console.log(result);
 
-    res.status(200).send({ "message": "User granted admin privileges" });
+    try {
+        const result = await db.query("UPDATE app_user SET is_admin = true WHERE id = $1", [appUserId]);
+        console.log(result);
+        res.status(200).send({ "message": "User granted admin privileges" });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        res.status(500).send({ "message": "Could not grant admin status" });
+    }
 });
 
 // REMOVE ADMIN
 adminRouter.get('/revokeadminstatus', checkUsernameOrEmailExists, async (req, res) => {
     // Get the appUser id from the checkUsernameOrEmailExists middleware
     const appUserId = req.appUser.id;
-    const result = await db.query("UPDATE app_user SET is_admin = false WHERE id = $1", [appUserId]);
-    console.log(result);
 
-    res.status(200).send({ "message": "Admin privileges revoked" });
+    try {
+        const result = await db.query("UPDATE app_user SET is_admin = false WHERE id = $1", [appUserId]);
+        console.log(result);
+        res.status(200).send({ "message": "Admin privileges revoked" });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        res.status(500).send({ "message": "Could not revoke admin status" });
+    }
 });
 
 
@@ -95,16 +110,24 @@ const checkAppUserIdExists = async (req, res, next) => {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Query the app user table
-    const usernameResult = await db.query("SELECT username FROM app_user WHERE id = $1", [appUserIdToDelete]);
+    try {
 
-    if (!usernameResult.rows.length) { // If there is no result, the app user does not exist
-        return res.status(404).send({ "message": "App user by that ID not found" });
+        // Query the app user table
+        const usernameResult = await db.query("SELECT username FROM app_user WHERE id = $1", [appUserIdToDelete]);
+
+        if (!usernameResult.rows.length) { // If there is no result, the app user does not exist
+            return res.status(404).send({ "message": "App user by that ID not found" });
+        }
+
+        // If the app user exists, attach the id to the request and move onto the next function
+        req.appUserIdToDelete = appUserIdToDelete;
+        next();
     }
 
-    // If the app user exists, attach the id to the request and move onto the next function
-    req.appUserIdToDelete = appUserIdToDelete;
-    next();
+    catch (error) {
+        console.error(error.stack);
+        res.status(500).send({ "message": "Could not verify app user exists" });
+    }
 }
 
 // TEST ENDPOINT - GET A SPECIFIC USER
@@ -230,26 +253,53 @@ adminRouter.delete('/deletespecificuser', checkAppUserIdExists, async (req, res)
     }
 });
 
-// DELETE ALL EXPIRED GUEST USERS
-adminRouter.delete('/deleteexpiredguestusers', async (req, res) => {
+// HELPER FUNCTION TO GET EXPIRED GUEST USERS
+const getExpiredGuestUsers = async (req, res, next) => {
     try {
         // Get ids of guest users that were created more than 12 hours ago
-        //const expiredGuestResults = await db.query("SELECT id FROM app_user WHERE is_guest = true AND date_created < now() - interval '12 hour'");
-
-        const expiredGuestResults = await db.query("SELECT id FROM app_user WHERE is_guest = true");
+        const expiredGuestResults = await db.query("SELECT id FROM app_user WHERE is_guest = true AND date_created < now() - interval '12 hour'");
+        //const expiredGuestResults = await db.query("SELECT id FROM app_user WHERE is_guest = true"); 
+        // Commented out line is for test purposes
 
         if (!expiredGuestResults.rows.length) { // If there are no expired guest users
-            return res.status(200).send({ "message": "No expired guest users to delete" });
+            return res.status(404).send({ "message": "There are no expired guest users" });
         }
 
-        // Create array of guet user ids
+        // Create array of guest user ids
         const expiredGuestIds = expiredGuestResults.rows.map(row => row.id);
         console.log("expiredGuestIds", expiredGuestIds);
 
-        // Iterate through the guestId array
-        const deletedGuestIds = await Promise.all(expiredGuestIds.map(async expiredGuestId => {
-            return await deleteAppUser(expiredGuestId);
-        }));
+        // Attach to req and call next
+        req.expiredGuestIds = expiredGuestIds;
+        next();
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).json({ "message": "Could not get expired guest users" });
+    }
+}
+
+adminRouter.get('/getexpiredguestusers', getExpiredGuestUsers, async (req, res) => {
+    // Get the array of expired guest ids from the req (attached by getExpiredGuestUsers)
+    const expiredGuestIds = req.expiredGuestIds;
+    return res.status(200).json({ expiredGuestIds });
+});
+
+// DELETE ALL EXPIRED GUEST USERS
+adminRouter.delete('/deleteexpiredguestusers', getExpiredGuestUsers, async (req, res) => {
+    try {
+        // Get the array of expired guest ids from the req (attached by getExpiredGuestUsers)
+        const expiredGuestIds = req.expiredGuestIds;
+
+        // Iterate through the guestId array and delete each one
+        const deletedGuestIds = await Promise.all(
+            expiredGuestIds.map(
+                async expiredGuestId => {
+                    return await deleteAppUser(expiredGuestId);
+                }
+            )
+        );
 
         return res.status(200).json({ deletedGuestIds });
     }
