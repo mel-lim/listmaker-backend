@@ -159,6 +159,15 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
+const findByUsernameValidation = data => {
+    const schema = Joi.object({
+        username: Joi.string()
+            .pattern(new RegExp("^[a-zA-Z0-9_]{2,}$"))
+            .required()
+    });
+    return schema.validate(data);
+}
+
 const deleteUserValidation = data => {
     const schema = Joi.object({
         appUserIdToDelete: Joi.number().required()
@@ -181,5 +190,6 @@ module.exports = {
     deleteListItemValidation,
     fetchListsValidation,
     deleteTripValidation,
+    findByUsernameValidation,
     deleteUserValidation
 }
