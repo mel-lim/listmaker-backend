@@ -10,7 +10,7 @@ const tripsRouter = express.Router();
 module.exports = tripsRouter;
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, getTripsValidation, editTripDetailsValidation, deleteTripValidation } = require('../validation');
+const { newTripValidation, editTripDetailsValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 const { deleteTrip } = require('../helperFunctions');
 
@@ -28,14 +28,8 @@ const listsRouter = require('./lists');
 
 // FETCH ALL TRIPS FOR THE LOGGED IN USER
 tripsRouter.get('/alltrips', async (req, res, next) => {
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data before we create a new trip
-    const { error } = getTripsValidation({ appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+    const appUserId = req.authorisedAppUserId;
 
     // Fetch all the trips for this user
     try {
@@ -64,11 +58,11 @@ tripsRouter.post('/newtrip', async (req, res) => {
         tripName = 'Unnamed Trip';
     }
 
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
+    // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+    const appUserId = req.authorisedAppUserId;
 
     // Validate the data for creating a new trip
-    const { error } = newTripValidation({ tripName, tripCategory, tripDuration, requestTemplate, appUserId });
+    const { error } = newTripValidation({ tripName, tripCategory, tripDuration, requestTemplate });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -207,14 +201,15 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
         // Make sure the user making the request is the user who is associated with the trip
         const appUserIdResult = await db.query('SELECT app_user_id FROM app_users_trips WHERE trip_id = $1', [tripId]);
 
-        // Get the app user id from req.appUserId (set by the verifyToken middleware)
-        const appUserId = req.appUserId;
+        // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+        const appUserId = req.authorisedAppUserId;
 
         // Compare the app user id - if they match, attach the tripDetails to the req and call next()
         if (appUserId === appUserIdResult.rows[0].app_user_id) {
-            req.tripDetails = tripIdResult.rows[0];
+            req.validatedTripDetails = tripIdResult.rows[0];
             console.log("user authorised to access this trip");
             next();
+
         } else {
             return res.status(403).send({ 'message': 'User not authorized' });
         }
@@ -230,13 +225,13 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
 tripsRouter.put('/:tripId/edittripdetails', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
+    const tripId = req.validatedTripDetails.id;
 
     // Get the other data from the request body sent by the client
     const { editedTripName } = req.body;
 
     // Validate the data
-    const { error } = editTripDetailsValidation({ tripId, editedTripName });
+    const { error } = editTripDetailsValidation({ editedTripName });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -260,13 +255,7 @@ tripsRouter.put('/:tripId/edittripdetails', async (req, res) => {
 tripsRouter.delete('/:tripId/deletetrip', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Validate the data
-    const { error } = deleteTripValidation({ tripId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    const tripId = req.validatedTripDetails.id;
 
     try {
         await deleteTrip(tripId);

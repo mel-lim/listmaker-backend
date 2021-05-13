@@ -12,7 +12,7 @@ const verifyToken = (req, res, next) => {
 
     try {
         const payload = jwt.verify(token, process.env.TOKEN_SECRET);
-        req.appUserId = payload.id;
+        req.authorisedAppUserId = payload.id;
         console.log("user verified");
         next();
     } catch (err) {

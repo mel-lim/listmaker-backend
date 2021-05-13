@@ -159,7 +159,7 @@ authRouter.get('/accountdetails', verifyToken, async (req, res, next) => {
         // Query the db for the app user details
         const { rows } = await db.query(
             'SELECT username, email FROM app_user WHERE id = $1',
-            [req.appUserId]);
+            [req.authorisedAppUserId]);
 
         // If the user details cannot be found, send a client-error message
         if (!rows[0]) {
@@ -192,6 +192,7 @@ const generateGuestUserDetails = (usernameLength) => {
     return { username, email, password };
 }
 
+// Function to create guest user
 const tryAsGuest = async (req, res, next) => {
 
     // Destructure new user details from the random user details generator - let's get a 5-letter username

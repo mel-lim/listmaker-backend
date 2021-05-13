@@ -9,7 +9,7 @@ module.exports = listsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { saveListsValidation, editListTitleValidation, newListValidation, deleteListValidation, fetchListsValidation } = require('../validation');
+const { editListTitleValidation } = require('../validation');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -27,16 +27,10 @@ listsRouter.get('/fetchlists', async (req, res) => {
 
     try {
         // Get the tripId from the trip details object attached to the request body by the trip id param validation
-        const tripId = req.tripDetails.id;
+        const tripId = req.validatedTripDetails.id;
 
-        // Get the app user id from req.appUserId (set by the verifyToken middleware)
-        const appUserId = req.appUserId;
-
-        // Validate the data
-        const { error } = fetchListsValidation({ tripId, appUserId });
-        if (error) {
-            return res.status(400).send({ 'message': error.details[0].message });
-        }
+        // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+        const appUserId = req.authorisedAppUserId;
 
         // Get the list titles
         const listTitlesResults = await db.query(
@@ -87,16 +81,10 @@ listsRouter.get('/fetchlists', async (req, res) => {
 listsRouter.post('/createnew', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
+    const tripId = req.validatedTripDetails.id;
 
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data
-    const { error } = newListValidation({ tripId, appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+    const appUserId = req.authorisedAppUserId;
 
     try {
         // Insert a new list into the db titled, 'Untitled'
@@ -132,16 +120,16 @@ listsRouter.param('listId', async (req, res, next, listId) => {
         console.log("listId validated to exist in db");
 
         // Make sure the list being queried is associated with the user and the trip
-        // The app user id is in req.appUserId (set by the verifyToken middleware)
-        // The param trip id is in req.tripDetails (set by trip id param validation)
+        // The app user id is in req.authorisedAppUserId (set by the verifyToken middleware)
+        // The param trip id is in req.validatedTripDetails (set by trip id param validation)
         if (
-            listIdResult.rows[0].app_user_id !== req.appUserId
-            || listIdResult.rows[0].trip_id !== req.tripDetails.id
+            listIdResult.rows[0].app_user_id !== req.authorisedAppUserId
+            || listIdResult.rows[0].trip_id !== req.validatedTripDetails.id
         ) {
             return res.status(403).send({ 'message': 'This request is not allowed' }); // Forbidden
         }
 
-        req.listId = parseInt(listId);
+        req.validatedListId = parseInt(listId);
         console.log("list id validated");
         next();
     }
@@ -155,13 +143,13 @@ listsRouter.param('listId', async (req, res, next, listId) => {
 listsRouter.put('/:listId/edit', async (req, res) => {
 
     // From the list id param validation
-    const listId = req.listId;
+    const listId = req.validatedListId;
 
     // Get the edited list title from the request body sent by the client
     const { editedListTitle } = req.body;
 
     // Validate the data
-    const { error } = editListTitleValidation(editedListTitle);
+    const { error } = editListTitleValidation({ editedListTitle });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -190,13 +178,7 @@ listsRouter.put('/:listId/edit', async (req, res) => {
 listsRouter.delete('/:listId/delete', async (req, res) => {
 
     // From the list id param validation
-    const listId = req.listId;
-
-    // Validate the data
-    const { error } = deleteListValidation(listId);
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    const listId = req.validatedListId;
 
     // Checkout/reserve a client for our transaction
     const client = await db.getClient();

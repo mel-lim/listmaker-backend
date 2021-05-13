@@ -9,7 +9,7 @@ module.exports = listItemsRouter;
 const db = require('../db');
 
 // Import helper functions and custom middleware
-const { newListItemValidation, editListItemValidation, deleteListItemValidation } = require('../validation');
+const { newListItemValidation, editListItemValidation } = require('../validation');
 
 // EVERYTHING COMING THROUGH LISTSROUTER WILL HAVE ALREADY BEEN AUTHENTICATED (using verifyToken function mounted on tripsRouter)
 
@@ -21,13 +21,13 @@ const { newListItemValidation, editListItemValidation, deleteListItemValidation 
 listItemsRouter.post('/addnew', async (req, res) => {
 
     // From the list id param validation
-    const listId = req.listId;
+    const listId = req.validatedListId;
 
     // Get the edited list item from the request body sent by the client
     const { newItemName } = req.body;
 
     // Validate the data
-    const { error } = newListItemValidation({ newItemName, listId });
+    const { error } = newListItemValidation({ newItemName });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -67,11 +67,11 @@ listItemsRouter.param('itemId', async (req, res, next, itemId) => {
 
         // Make sure the list item being queried is associated with the list
         // The list id is attached to the req by the listid param validation
-        if (itemIdResult.rows[0].list_id !== req.listId) {
+        if (itemIdResult.rows[0].list_id !== req.validatedListId) {
             return res.status(403).send({ 'message': 'This request is not allowed' }); // Forbidden
         }
 
-        req.itemId = itemId;
+        req.validatedItemId = itemId;
         console.log("item id validated");
         next();
     }
@@ -88,10 +88,10 @@ listItemsRouter.put('/:itemId/edit', async (req, res) => {
     const { editedItemName } = req.body;
 
     // From itemId param validation
-    const itemId = req.itemId;
+    const itemId = req.validatedItemId;
 
     // Validate the data
-    const { error } = editListItemValidation({ editedItemName, itemId });
+    const { error } = editListItemValidation({ editedItemName });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -120,13 +120,7 @@ listItemsRouter.put('/:itemId/edit', async (req, res) => {
 listItemsRouter.put('/:itemId/delete', async (req, res) => {
 
     // From itemId param validation
-    const itemId = req.itemId;
-
-    // Validate the data
-    const { error } = deleteListItemValidation(itemId);
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    const itemId = req.validatedItemId;
 
     try {
         // Update the list item
@@ -152,13 +146,7 @@ listItemsRouter.put('/:itemId/delete', async (req, res) => {
 listItemsRouter.put('/:itemId/undodelete', async (req, res) => {
 
     // From itemId param validation
-    const itemId = req.itemId;
-
-    // Validate the data
-    const { error } = deleteListItemValidation(itemId);
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    const itemId = req.validatedItemId;
 
     try {
         // Update the list item
