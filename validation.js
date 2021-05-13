@@ -7,7 +7,7 @@ const signUpValidation = data => {
             .min(2)
             .required(),
         email: Joi.string()
-            .email()
+            .email({ minDomainSegments: 2 })
             .min(6)
             .required(),
         password: Joi.string()
@@ -24,7 +24,7 @@ const loginValidation = data => {
             .empty(''),
         email: Joi.string()
             .empty('')
-            .email(),
+            .email({ minDomainSegments: 2 }),
         password: Joi.string()
             .min(8)
             .required()
@@ -159,12 +159,16 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
-const findByUsernameValidation = data => {
+const findAppUserValidation = data => {
     const schema = Joi.object({
         username: Joi.string()
             .pattern(new RegExp("^[a-zA-Z0-9_]{2,}$"))
-            .required()
-    });
+            .empty(''),
+        email: Joi.string()
+            .email({ minDomainSegments: 2 })
+            .empty(''),
+    })
+        .xor('username', 'email');
     return schema.validate(data);
 }
 
@@ -190,6 +194,6 @@ module.exports = {
     deleteListItemValidation,
     fetchListsValidation,
     deleteTripValidation,
-    findByUsernameValidation,
+    findAppUserValidation,
     deleteUserValidation
 }

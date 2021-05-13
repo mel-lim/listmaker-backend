@@ -13,35 +13,45 @@ module.exports = adminRouter;
 const dayjs = require('dayjs'); // For manipulating date/time
 
 // Import helper functions and custom middleware
-const { findByUsernameValidation, deleteUserValidation } = require('../validation');
+const { findAppUserValidation, deleteUserValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 const verifyAdmin = require('../verifyAdmin');
 
 // MOUNT THE AUTHENTICATION AND AUTHORIZATION MIDDLEWARE - all routes in this router requires the user to be authenticated and authorized as ADMIN
 adminRouter.use(verifyToken, verifyAdmin);
 
-// GET APP USER ID BY USERNAME
-adminRouter.get('/findbyusername', async (req, res) => {
+// GET APP USER ID BY USERNAME OR EMAIL
+adminRouter.get('/findappuser', async (req, res) => {
     // Get the username from the request body
-    const { username } = req.body;
+    const { username, email } = req.body;
 
     // Validate the username
-    const { error } = findByUsernameValidation({ username });
+    const { error } = findAppUserValidation({ username, email });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
-    // Query the app user table
-    const usernameResult = await db.query("SELECT id FROM app_user WHERE username = $1", [username]);
+    // Detect whether the user identity provided is a username or email and set the text and variable for the SQL query accordingly
+    let queryText;
+    let values;
 
-    if (!usernameResult.rows.length) { // If there is no result, the app user does not exist
-        return res.status(404).send({ "message": "App user by that username not found" });
+    if (username) {
+        queryText = 'SELECT id FROM app_user WHERE username = $1';
+        values = [username];
+    } else if (email) {
+        queryText = 'SELECT id FROM app_user WHERE email = $1';
+        values = [email];
     }
 
-    return res.status(200).json({ appUserId: usernameResult.rows[0].id })
-});
+    // Query the app user table
+    const result = await db.query(queryText, values);
 
-// GET APP USER BY EMAIL
+    if (!result.rows.length) { // If there is no result, the app user does not exist
+        return res.status(404).send({ "message": "App user by that username / email not found" });
+    }
+
+    return res.status(200).json({ appUserId: result.rows[0].id });
+});
 
 // ADD ADMIN
 
@@ -121,16 +131,16 @@ const deleteTrip = async tripId => {
         }
 
         catch (error) {
-        await client.query('ROLLBACK');
-        console.error(`Error committing transaction to delete trip of id ${tripId}`, error.stack);
-        reject(error); // If unsuccessful, send back the error
-    }
+            await client.query('ROLLBACK');
+            console.error(`Error committing transaction to delete trip of id ${tripId}`, error.stack);
+            reject(error); // If unsuccessful, send back the error
+        }
 
-    finally {
-        client.release();
-    }
+        finally {
+            client.release();
+        }
 
-});
+    });
 }
 
 // HELPER FUNCTION TO DELETE USER BY ID
