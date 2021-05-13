@@ -14,6 +14,3 @@ VALUES ('admin');
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO me;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO me;
-
-DELETE FROM app_user
-WHERE is_guest = true AND date_created < 'Today, 01:56:33 -07';

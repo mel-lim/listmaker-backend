@@ -159,6 +159,13 @@ const fetchListsValidation = data => {
     return schema.validate(data);
 }
 
+const deleteUserValidation = data => {
+    const schema = Joi.object({
+        appUserIdToDelete: Joi.number().required()
+    });
+    return schema.validate(data);
+}
+
 module.exports = {
     signUpValidation,
     loginValidation,
@@ -173,5 +180,6 @@ module.exports = {
     editListItemValidation,
     deleteListItemValidation,
     fetchListsValidation,
-    deleteTripValidation
+    deleteTripValidation,
+    deleteUserValidation
 }

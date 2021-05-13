@@ -19,9 +19,10 @@ const verifyAdmin = async (req, res, next) => {
         if (adminUsernames.includes(rows[0].username)) {
             console.log("admin verified");
             next();
+            
+        } else {
+            res.status(401).send({ "message": "User does not have admin privileges" });
         }
-        
-        res.status(401).send({ "message": "User does not have admin privileges" });
 
     } catch (err) {
         console.error(err);
