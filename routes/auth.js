@@ -215,7 +215,7 @@ const tryAsGuest = async (req, res, next) => {
         const appUserId = rows[0].id;
 
         // Create and assign a token to the user
-        const token = jwt.sign({ id: appUserId }, process.env.TOKEN_SECRET, { expiresIn: 120 }); // 60 seconds to test
+        const token = jwt.sign({ id: appUserId }, process.env.TOKEN_SECRET, { expiresIn: '12h' }); 
 
         // Send the jwt in a http-only cookie
         res.cookie('token', token, process.env.NODE_ENV === "production" ? jwtCookieOptionsProduction : jwtCookieOptionsDev);
