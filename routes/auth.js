@@ -10,7 +10,7 @@ const authRouter = express.Router();
 module.exports = authRouter;
 
 // Import helper functions and custom middleware
-const { signUpValidation, loginValidation } = require('../validation');
+const { signUpValidation, loginValidation, changePasswordValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
 const { jwtCookieOptionsDev, jwtCookieOptionsProduction, usernameCookieOptionsDev, usernameCookieOptionsProduction } = require('../cookieConfig');
 
@@ -45,7 +45,6 @@ authRouter.post('/signup', async (req, res, next) => {
 
     // Create new user
     try {
-
         const { rows } = await db.query(
             'INSERT INTO app_user (username, email, hashed_password, date_created, date_modified) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, date_created, date_modified',
             [username, email, hashedPassword, dateCreated, dateModified]);
@@ -104,6 +103,7 @@ authRouter.post('/login', async (req, res, next) => {
 
         // Compare user-inputted plain-text password with the hashed password stored in the db using bcrypt's async compare method
         const isValidPassword = await bcrypt.compare(password, rows[0].hashed_password);
+
         if (!isValidPassword) { // if the passwords don't match, send a client error message
             return res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
         }
@@ -178,6 +178,63 @@ authRouter.get('/accountdetails', verifyToken, async (req, res, next) => {
     }
 });
 
+// CHANGE USER'S PASSWORD
+authRouter.put('/changepassword', verifyToken, async (req, res, next) => {
+
+    // Validate the data before we create a new user
+    const { error } = changePasswordValidation(req.body);
+    if (error) {
+        return res.status(400).send({ 'message': error.details[0].message });
+    }
+
+    // Destructure passwords from the req body
+    const { oldPassword, newPassword } = req.body;
+
+    // From verifyToken
+    const appUserId = req.authorisedAppUserId;
+
+    try {
+        // Get the hashed password from the db
+        const { rows } = await db.query(
+            "SELECT hashed_password FROM app_user WHERE id = $1",
+            [appUserId]
+        );
+        const hashedOldPassword = rows[0].hashed_password;
+
+        if (!hashedOldPassword || !hashedOldPassword.length) {
+            return res.status(500).send({ 'message': 'Something else went wrong - please submit your issue using our contact form' });
+        }
+
+        // Compare user-inputted plain-text old password with the hashed password stored in the db using bcrypt's async compare method
+        const isValidPassword = await bcrypt.compare(oldPassword, hashedOldPassword);
+
+        if (!isValidPassword) { // if the passwords don't match, send a client error message
+            return res.status(400).send({ 'message': 'The credentials you provided are incorrect' });
+        }
+
+        // Hash the new password using bcrypt's async hash technique
+        const salt = await bcrypt.genSalt(10);
+        const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+        // Update the password with the new password
+        const result = await db.query(
+            "UPDATE app_user SET hashed_password = $1 WHERE id = $2",
+            [hashedNewPassword, appUserId]
+        );
+
+        if ( !result || !result.rowCount ) {
+            return res.status(500).send({ 'message': 'Password could not be changed E0' });
+        }
+
+        res.status(200).send({ "message": "Password successfully changed" });
+    }
+
+    catch (error) {
+        console.error(error.stack);
+        return res.status(500).send({ 'message': 'Password could not be changed E1' });
+    }   
+});
+
 // Generate random username
 const generateGuestUserDetails = (usernameLength) => {
     const randomUsernameArray = [];
@@ -205,7 +262,7 @@ const tryAsGuest = async (req, res, next) => {
     // Get today's date
     const dateCreated = new Date();
     const dateModified = dateCreated;
-    
+
     try {
         // Insert guest user into db
         const { rows } = await db.query(
@@ -215,7 +272,7 @@ const tryAsGuest = async (req, res, next) => {
         const appUserId = rows[0].id;
 
         // Create and assign a token to the user
-        const token = jwt.sign({ id: appUserId }, process.env.TOKEN_SECRET, { expiresIn: '12h' }); 
+        const token = jwt.sign({ id: appUserId }, process.env.TOKEN_SECRET, { expiresIn: '12h' });
 
         // Send the jwt in a http-only cookie
         res.cookie('token', token, process.env.NODE_ENV === "production" ? jwtCookieOptionsProduction : jwtCookieOptionsDev);

@@ -34,6 +34,19 @@ const loginValidation = data => {
     return schema.validate(data);
 }
 
+const changePasswordValidation = data => {
+    const schema = Joi.object({
+        oldPassword: Joi.string()
+        .min(8)
+        .required(),
+        newPassword: Joi.string()
+        .min(8)
+        .required()
+    });
+
+    return schema.validate(data);
+}
+
 const newTripValidation = data => {
     const schema = Joi.object({
         tripName: Joi.string()
@@ -104,6 +117,7 @@ const deleteUserValidation = data => {
 module.exports = {
     signUpValidation,
     loginValidation,
+    changePasswordValidation,
     newTripValidation,
     editTripDetailsValidation,
     editListTitleValidation,
