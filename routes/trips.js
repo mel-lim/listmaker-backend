@@ -95,11 +95,19 @@ tripsRouter.post('/newtrip', async (req, res) => {
         console.log("relationship has been recorded in app_users_trips");
 
         // Get the template list titles
-        const templateListResults = await client.query(
-            "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
-            [tripCategory, tripDuration]
-        );
-
+        let templateListResults;
+        if (tripCategory === 'other') { // If user selected 'other' for tripCategory, populate with the hiking template list items
+            templateListResults = await client.query(
+                "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
+                ['hiking', tripDuration]
+            );
+        } else {
+            templateListResults = await client.query(
+                "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
+                [tripCategory, tripDuration]
+            );
+        }
+        
         // Save the resulting array of lists
         const templateLists = templateListResults.rows; // each item in the 'templateLists' array is an object e.g. { "id": 1, "title": "Gear" }
 
