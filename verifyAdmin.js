@@ -4,7 +4,8 @@ const db = require('./db');
 // CUSTOM MIDDLEWARE TO VERIFY THE JWT TOKEN AND AUTHORIZE THE USER
 const verifyAdmin = async (req, res, next) => {
     // Get the app user id of the current user - set by verifyToken at req.appUserId
-    const appUserId = req.appUserId;
+    const appUserId = req.authorisedAppUserId;
+    console.log(appUserId);
     
     try {
         // Check whether the app user is marked as an admin in the app_user table
