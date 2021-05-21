@@ -58,7 +58,7 @@ listItemsRouter.param('itemId', async (req, res, next, itemId) => {
     try {
 
         const itemIdResult = await db.query('SELECT list_id FROM list_item WHERE id = $1', [itemId]);
-
+        console.log(itemIdResult.rows);
         // Make sure list exists
         if (!itemIdResult.rows.length) {
             return res.status(404).send({ 'message': 'List item not found' });

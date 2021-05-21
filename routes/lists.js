@@ -113,6 +113,7 @@ listsRouter.param('listId', async (req, res, next, listId) => {
     try {
         const listIdResult = await db.query('SELECT app_user_id, trip_id FROM list WHERE id = $1', [listId]);
 
+        console.log(listIdResult.rows);
         // Make sure list exists
         if (!listIdResult.rows.length) {
             return res.status(404).send({ 'message': 'List not found' });

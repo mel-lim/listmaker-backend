@@ -202,6 +202,7 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
         const tripIdResult = await db.query('SELECT * FROM trip WHERE id = $1', [tripId]);
 
         if (!tripIdResult.rows.length) {
+            console.log(tripIdResult.rows);
             return res.status(404).send({ 'message': 'Trip not found' });
         }
         console.log("tripId validated to exist in db");
