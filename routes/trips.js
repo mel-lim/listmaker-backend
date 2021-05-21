@@ -10,8 +10,9 @@ const tripsRouter = express.Router();
 module.exports = tripsRouter;
 
 // IMPORT HELPER FUNCTIONS AND CUSTOM MIDDLEWARE
-const { newTripValidation, getTripsValidation, saveTripDetailsValidation, deleteTripValidation } = require('../validation');
+const { newTripValidation, editTripDetailsValidation } = require('../validation');
 const verifyToken = require('../verifyToken');
+const { deleteTrip } = require('../helperFunctions');
 
 // Import js libraries 
 const dayjs = require('dayjs'); // For manipulating date/time
@@ -27,14 +28,8 @@ const listsRouter = require('./lists');
 
 // FETCH ALL TRIPS FOR THE LOGGED IN USER
 tripsRouter.get('/alltrips', async (req, res, next) => {
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
-
-    // Validate the data before we create a new trip
-    const { error } = getTripsValidation({ appUserId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
+    // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+    const appUserId = req.authorisedAppUserId;
 
     // Fetch all the trips for this user
     try {
@@ -43,7 +38,7 @@ tripsRouter.get('/alltrips', async (req, res, next) => {
             "WITH trip_master AS (SELECT * FROM trip INNER JOIN app_users_trips ON trip.id = app_users_trips.trip_id ) SELECT id, name, category, duration FROM trip_master WHERE app_user_id = $1",
             [appUserId]);
 
-            console.log(rows);
+        console.log(rows);
 
         return res.status(200).json({ "trips": rows });
     }
@@ -63,11 +58,11 @@ tripsRouter.post('/newtrip', async (req, res) => {
         tripName = 'Unnamed Trip';
     }
 
-    // Get the app user id from req.appUserId (set by the verifyToken middleware)
-    const appUserId = req.appUserId;
+    // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+    const appUserId = req.authorisedAppUserId;
 
     // Validate the data for creating a new trip
-    const { error } = newTripValidation({ tripName, tripCategory, tripDuration, requestTemplate, appUserId });
+    const { error } = newTripValidation({ tripName, tripCategory, tripDuration, requestTemplate });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
@@ -80,67 +75,112 @@ tripsRouter.post('/newtrip', async (req, res) => {
     try {
         // Start the transaction on our checked out client 
         await client.query('BEGIN');
+        console.log("transaction has begun");
 
         // Insert new trip into the trip table and return the trip id
-        const insertTripText = 'INSERT INTO trip (name, category, duration) VALUES($1, $2, $3) RETURNING id';
-        const insertTripValues = [tripName, tripCategory, tripDuration];
-        const tripIdResult = await client.query(insertTripText, insertTripValues);
+        const tripIdResult = await client.query(
+            'INSERT INTO trip (name, category, duration) VALUES($1, $2, $3) RETURNING id',
+            [tripName, tripCategory, tripDuration]
+        );
+        console.log("new trip has been inserted");
 
         // Extract the trip id returned from this query
         const tripId = tripIdResult.rows[0].id;
 
         // Record the relationship in the app_users_trips junction table
-        const insertAppUserTripText = 'INSERT INTO app_users_trips(app_user_id, trip_id) VALUES ($1, $2)';
-        const insertAppUserTripValues = [appUserId, tripId];
-        await client.query(insertAppUserTripText, insertAppUserTripValues);
+        await client.query(
+            'INSERT INTO app_users_trips(app_user_id, trip_id) VALUES ($1, $2)',
+            [appUserId, tripId]
+        );
+        console.log("relationship has been recorded in app_users_trips");
 
         // Get the template list titles
-        const getListTitleText = "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)"
-        const getListTitleValues = [tripCategory, tripDuration];
-        const listsResults = await client.query(getListTitleText, getListTitleValues);
-
+        let templateListResults;
+        if (tripCategory === 'other') { // If user selected 'other' for tripCategory, populate with the hiking template list items
+            templateListResults = await client.query(
+                "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
+                ['hiking', tripDuration]
+            );
+        } else {
+            templateListResults = await client.query(
+                "SELECT id, title FROM template_list WHERE trip_category = $1 AND (trip_duration = 'any' OR trip_duration = $2)",
+                [tripCategory, tripDuration]
+            );
+        }
+        
         // Save the resulting array of lists
-        const lists = listsResults.rows; // each item in the 'lists' array is an object e.g. { "id": 1, "title": "Gear" }
+        const templateLists = templateListResults.rows; // each item in the 'templateLists' array is an object e.g. { "id": 1, "title": "Gear" }
 
-        // Initialise empty array to hold list item data
+        console.log("template lists have been obtained");
+
+        // Initialise an empty array to hold the lists
+        const lists = [];
         const allListItems = [];
 
-        // If user does not want their lists to be generated with template/suggested list items
-        if (requestTemplate === "no") {
+        // Iterate through the array of template lists, insert each list into the list table
+        await Promise.all(
+            templateLists.map(
+                async templateList => {
+                    // Insert each template list into the list table
+                    const listResult = await client.query(
+                        "INSERT INTO list (title, app_user_id, trip_id) VALUES ($1, $2, $3) RETURNING id, title",
+                        [templateList.title, appUserId, tripId]
+                    );
+                    // Add the list {id: XX, title: XX} to the lists array
+                    const list = listResult.rows[0];
+                    console.log(list);
+                    // Add the list to the lists array
+                    lists.push(list);
 
-            // Iterate through the array of lists to add an 'edit me' item for each list
-            lists.forEach(async (list, index, lists) => {
+                    // Initialise an empty array to hold the template list items
+                    let templateListItems = [];
 
-                allListItems.push([{ name: 'Edit me', list_id: list.id }]);
+                    if (requestTemplate === "no") { // If user does not want their lists to be generated with template/suggested list items
 
-                // On the last iteration, commit the changes and return the client to the pool
-                if (index === lists.length - 1) {
-                    await client.query('COMMIT');
+                        // Add a placeholder list item named 'Edit me' to each list
+                        templateListItems = [{ name: 'Edit me', list_id: list.id }];
 
-                    res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
+                    } else { // If the user wants their lists to be generated with template / suggested list items
+
+                        // Get the template list items for each list
+                        const templateListItemResults = await client.query(
+                            "SELECT * FROM template_list_item WHERE list_id = $1",
+                            [templateList.id]
+                        );
+                        templateListItems = templateListItemResults.rows;
+                    }
+
+                    console.log("templateListItems have been obtained");
+
+                    // Iterate through the template list items and insert each template list item into the list_item table
+                    const listItems = await Promise.all(
+                        templateListItems.map(
+                            async templateListItem => {
+                                const listItemResults = await client.query(
+                                    "INSERT INTO list_item (name, list_id) VALUES ($1, $2) RETURNING *",
+                                    [templateListItem.name, list.id]
+                                );
+                                const listItem = listItemResults.rows[0];
+                                // [{id: XX, title: XX, list_id: XX, is_checked: XX, is_deleted: XX}, {...}, {...}, ...]
+                                return listItem;
+                            }
+                        )
+                    );
+
+                    // Add the listItems to the allListItems array
+                    allListItems.push(listItems);
+
+                    console.log("templateListItems have been inserted into the list_item table");
                 }
-            });
+            )
+        );
 
-        } else { // If the user does want their lists to be generated with template / suggested list items
+        //Might need to sort the lists later - let's see
 
-            // Iterate through the array of lists to get the template list items for each list
-            lists.forEach(async (list, index, lists) => {
-                const getListItemsText = "SELECT * FROM template_list_item WHERE list_id = $1";
-                const getListItemsValue = [list.id];
-                const listItemsResults = await client.query(getListItemsText, getListItemsValue);
+        await client.query('COMMIT');
+        console.log("commited");
 
-                const listItems = listItemsResults.rows;
-                console.log(listItems);
-                allListItems.push(listItems);
-
-                // On the last iteration, commit the changes and return the client to the pool
-                if (index === lists.length - 1) {
-                    await client.query('COMMIT');
-
-                    res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
-                }
-            });
-        }
+        res.status(201).json({ 'tripId': tripId, 'lists': lists, 'allListItems': allListItems });
     }
 
     catch (error) {
@@ -169,14 +209,15 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
         // Make sure the user making the request is the user who is associated with the trip
         const appUserIdResult = await db.query('SELECT app_user_id FROM app_users_trips WHERE trip_id = $1', [tripId]);
 
-        // Get the app user id from req.appUserId (set by the verifyToken middleware)
-        const appUserId = req.appUserId;
+        // Get the app user id from req.authorisedAppUserId (set by the verifyToken middleware)
+        const appUserId = req.authorisedAppUserId;
 
         // Compare the app user id - if they match, attach the tripDetails to the req and call next()
         if (appUserId === appUserIdResult.rows[0].app_user_id) {
-            req.tripDetails = tripIdResult.rows[0];
+            req.validatedTripDetails = tripIdResult.rows[0];
             console.log("user authorised to access this trip");
             next();
+
         } else {
             return res.status(403).send({ 'message': 'User not authorized' });
         }
@@ -188,23 +229,23 @@ tripsRouter.param('tripId', async (req, res, next, tripId) => {
 });
 
 
-// SAVE CHANGES TO TRIP DETAILS
-tripsRouter.put('/:tripId/savetripdetails', async (req, res) => {
+// EDIT TRIP DETAILS
+tripsRouter.put('/:tripId/edittripdetails', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
+    const tripId = req.validatedTripDetails.id;
 
     // Get the other data from the request body sent by the client
-    const { tripName } = req.body;
+    const { editedTripName } = req.body;
 
     // Validate the data
-    const { error } = saveTripDetailsValidation({ tripId, tripName });
+    const { error } = editTripDetailsValidation({ editedTripName });
     if (error) {
         return res.status(400).send({ 'message': error.details[0].message });
     }
 
     try {
-        const { rowCount } = await db.query('UPDATE trip SET name = $1 WHERE id = $2', [tripName, tripId]);
+        const { rowCount } = await db.query('UPDATE trip SET name = $1 WHERE id = $2', [editedTripName, tripId]);
         if (rowCount === 1) {
             const currentTimeDate = dayjs().format('llll');
             return res.status(200).json({ "message": `Trip details last saved: ${currentTimeDate}`, 'lastSaved': currentTimeDate });
@@ -222,70 +263,17 @@ tripsRouter.put('/:tripId/savetripdetails', async (req, res) => {
 tripsRouter.delete('/:tripId/deletetrip', async (req, res) => {
 
     // Get the tripId from the trip details object attached to the request body by the trip id param validation
-    const tripId = req.tripDetails.id;
-
-    // Validate the data
-    const { error } = deleteTripValidation({ tripId });
-    if (error) {
-        return res.status(400).send({ 'message': error.details[0].message });
-    }
-
-    // Checkout/reserve a client for our transaction
-    const client = await db.getClient();
+    const tripId = req.validatedTripDetails.id;
 
     try {
-        // Start the transaction on our checked out client 
-        await client.query('BEGIN');
-
-        // Query the list table to find the list ids associated with this trip
-        const listIdResults = await client.query('SELECT id from list WHERE trip_id = $1', [tripId]);
-
-        // Extract the list ids returned from this query
-        if (listIdResults.rows && listIdResults.rows.length) {
-            const listIds = listIdResults.rows.map(item => item.id);
-            console.log(listIds);
-
-            // Iterate through the list ids
-            listIds.forEach(async (listId, index, listIds) => {
-
-                // DELETE THE OLD LIST ITEMS ASSOCIATED WITH THE LIST ID
-                await client.query("DELETE FROM list_item WHERE list_id = $1", [listId]);
-                console.log('old list items have been deleted from the list_item table', listId);
-
-                // Once we reach the last iteration of this loop, we will call the next nested query
-                if (index === listIds.length - 1) {
-                    console.log("last loop interation");
-
-                    // DELETE THE OLD LISTS FROM THE LIST TABLE
-                    await client.query("DELETE FROM list WHERE trip_id = $1", [tripId]);
-                    console.log("old lists have been deleted from list table");
-
-                    // DELETE THE RELATIONSHIP BETWEEN TRIP AND APP_USER FROM THE APP_USERS_TRIPS TABLE
-                    await client.query("DELETE FROM app_users_trips WHERE trip_id = $1", [tripId]);
-                    console.log("relationship has been deleted");
-
-                    const deleteTripResults = await client.query("DELETE FROM trip WHERE id = $1", [tripId]);
-
-                    if (deleteTripResults.rowCount === 1) {
-                        console.log("trip has been deleted");
-                        await client.query('COMMIT');
-                        res.sendStatus(204);
-                    } else {
-                        throw 'trip could not be deleted';
-                    }
-                }
-            });
-        }
+        await deleteTrip(tripId);
+        console.log('delete trip transaction completed');
+        return res.sendStatus(204);
     }
 
     catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error committing transaction', err.stack);
-        res.status(400).send({ 'message': 'Trip could not be deleted' });
-    }
-
-    finally {
-        client.release();
+        console.error(error.stack);
+        return res.status(500).json({ 'message': 'Trip could not be deleted' });
     }
 });
 

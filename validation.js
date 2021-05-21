@@ -7,7 +7,7 @@ const signUpValidation = data => {
             .min(2)
             .required(),
         email: Joi.string()
-            .email()
+            .email({ minDomainSegments: 2 })
             .min(6)
             .required(),
         password: Joi.string()
@@ -24,7 +24,7 @@ const loginValidation = data => {
             .empty(''),
         email: Joi.string()
             .empty('')
-            .email(),
+            .email({ minDomainSegments: 2 }),
         password: Joi.string()
             .min(8)
             .required()
@@ -34,10 +34,14 @@ const loginValidation = data => {
     return schema.validate(data);
 }
 
-const getTripsValidation = data => {
+const changePasswordValidation = data => {
     const schema = Joi.object({
-        appUserId: Joi.number()
-            .required()
+        oldPassword: Joi.string()
+        .min(8)
+        .required(),
+        newPassword: Joi.string()
+        .min(8)
+        .required()
     });
 
     return schema.validate(data);
@@ -52,66 +56,73 @@ const newTripValidation = data => {
         tripDuration: Joi.string()
             .required(), // this will be 'day' or 'overnight'
         requestTemplate: Joi.string()
-            .required(), // this will be 'yes' or 'no' - the user will select whether they want to generate the lists with the template items or not
-        appUserId: Joi.number()
-            .required()
+            .required() // this will be 'yes' or 'no' - the user will select whether they want to generate the lists with the template items or not
     });
 
     return schema.validate(data);
 }
 
-const saveTripDetailsValidation = data => {
+const editTripDetailsValidation = data => {
     const schema = Joi.object({
-        tripId: Joi.number()
-            .required(),
-        tripName: Joi.string().required(),
-    });
-
-    return schema.validate(data);
-} 
-
-const deleteTripValidation = data => {
-    const schema = Joi.object({
-        tripId: Joi.number()
-            .required()
+        editedTripName: Joi.string().required()
     });
 
     return schema.validate(data);
 }
 
-const saveListsValidation = data => {
+const editListTitleValidation = data => {
     const schema = Joi.object({
-        listTitles: Joi.array()
-            .items(
-                Joi.string()
-                    .required()
-            )
-            .required(),
-        tripId: Joi.number()
-            .required(),
-        listItemNames: Joi.array()
-            .items(
-                Joi.array()
-                    .items(
-                        Joi.string().required()
-                    )
-            ).required(),
-        appUserId: Joi.number()
-            .required()
+        editedListTitle: Joi.string()
+        .required()
     });
-
     return schema.validate(data);
 }
 
-const fetchListsValidation = data => {
+const newListItemValidation = data => {
     const schema = Joi.object({
-        tripId: Joi.number()
-            .required(),
-        appUserId: Joi.number()
+        newItemName: Joi.string()
             .required()
     });
-
     return schema.validate(data);
 }
 
-module.exports = { signUpValidation, loginValidation, getTripsValidation, newTripValidation, saveListsValidation, fetchListsValidation, saveTripDetailsValidation, deleteTripValidation }
+const editListItemValidation = data => {
+    const schema = Joi.object({
+        editedItemName: Joi.string()
+            .required()
+    });
+    return schema.validate(data);
+}
+
+const findAppUserValidation = data => {
+    const schema = Joi.object({
+        username: Joi.string()
+            .pattern(new RegExp("^[a-zA-Z0-9_]{2,}$"))
+            .empty(''),
+        email: Joi.string()
+            .email({ minDomainSegments: 2 })
+            .empty(''),
+    })
+        .xor('username', 'email');
+    return schema.validate(data);
+}
+
+const deleteUserValidation = data => {
+    const schema = Joi.object({
+        appUserIdToDelete: Joi.number().required()
+    });
+    return schema.validate(data);
+}
+
+module.exports = {
+    signUpValidation,
+    loginValidation,
+    changePasswordValidation,
+    newTripValidation,
+    editTripDetailsValidation,
+    editListTitleValidation,
+    newListItemValidation,
+    editListItemValidation,
+    findAppUserValidation,
+    deleteUserValidation
+}
