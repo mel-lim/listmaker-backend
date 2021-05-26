@@ -24,7 +24,8 @@ contactRouter.post('', (req, res) => {
     const name = req.body.name;
     const email = req.body.email;
     const subject = req.body.subject;
-    const message = req.body.subject;
+    const message = req.body.message;
+    const source = req.body.source || "Kit Collab";
 
     const mail = {
         from: name,
@@ -33,7 +34,8 @@ contactRouter.post('', (req, res) => {
         html:   `<p>Name: ${name}</p>
                 <p>Email: ${email}</p>
                 <p>Subject: ${subject}</p>
-                <p>Message: ${message}</p>`
+                <p>Message: ${message}</p>
+                <p>Source: ${source}</p>`
     };
 
     contactEmail.sendMail(mail, (error) => {
